@@ -1,0 +1,72 @@
+<div class="dialog-container">
+  <mat-toolbar color="primary" class="mat-toolbar-single-row">
+    <h2>Add </h2>
+    <span fxFlex>: {{labelNames[currentFieldType]}}</span>
+    <button mat-icon-button
+            (click)="cancel()"
+            type="button">
+      <mat-icon class="material-icons">close</mat-icon>
+    </button>
+  </mat-toolbar>
+
+  <form [formGroup]="modelNodeAdditionalFieldForm" (ngSubmit)="save()">
+    <mat-progress-bar color="warn" mode="indeterminate" *ngIf="isLoading$ | async">
+    </mat-progress-bar>
+
+    <section class="td-model-additional-field">
+      <mat-form-field fxFlex class="mat-block">
+        <mat-label>Name</mat-label>
+        <input matInput formControlName="name" required>
+      </mat-form-field>
+      <mat-form-field *ngIf="currentFieldType ===  AdditionalFields.ATTRIBUTES" fxFlex class="mat-block tb-value-type">
+        <mat-label translate>value.type</mat-label>
+        <mat-select [formControlName]="'type'">
+          <mat-select-trigger>
+            <mat-icon svgIcon="{{ valueTypes.get(modelNodeAdditionalFieldForm.value.type ).icon }}"></mat-icon>
+            <span>{{ valueTypes.get(modelNodeAdditionalFieldForm.value.type).name | translate }}</span>
+          </mat-select-trigger>
+          <mat-option *ngFor="let valueType of valueTypeKeys" [value]="valueType">
+            <mat-icon svgIcon="{{ valueTypes.get(valueTypeEnum[valueType]).icon }}"></mat-icon>
+            <span>{{ valueTypes.get(valueTypeEnum[valueType])?.name | translate }}</span>
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
+      <div fxFlex class="mat-block" *ngIf="currentFieldType ===  AdditionalFields.ATTRIBUTES && (modelNodeAdditionalFieldForm.get('type').value === valueTypeEnum.INTEGER || modelNodeAdditionalFieldForm.get('type').value === valueTypeEnum.STRING)">
+        <mat-checkbox formControlName="isEnum" (change)="handleEnumChecked($event)">Enum</mat-checkbox>
+      </div>
+      <mat-form-field fxFlex class="mat-block" *ngIf="isEnum && modelNodeAdditionalFieldForm.get('enumOptions')">
+        <mat-label>Possible values</mat-label>
+        <mat-chip-grid #chipGrid aria-label="Enter value" formControlName="enumOptions">
+          <mat-chip-row *ngFor="let option of modelNodeAdditionalFieldForm.get('enumOptions').value; let i = index" (removed)="removeOption(i)">
+            {{option}}
+            <button matChipRemove>
+              <mat-icon>cancel</mat-icon>
+            </button>
+          </mat-chip-row>
+          <input matInput placeholder="New option..." [type]="modelNodeAdditionalFieldForm.get('type').value === valueTypeEnum.INTEGER ? 'number' : 'text'"
+                 [matChipInputFor]="chipGrid"
+                 (matChipInputTokenEnd)="addOption($event)"/>
+        </mat-chip-grid>
+      </mat-form-field>
+    </section>
+
+    <div mat-dialog-actions fxLayoutAlign="end center">
+      <button mat-button color="primary"
+              type="button"
+              [disabled]="(isLoading$ | async)"
+              (click)="cancel()">
+        {{ 'action.cancel' | translate }}
+      </button>
+
+      <button mat-raised-button color="primary"
+              type="submit"
+              [disabled]="(isLoading$ | async)
+              || modelNodeAdditionalFieldForm.invalid
+              || (!modelNodeAdditionalFieldForm.touched)
+      ">
+        Add
+      </button>
+    </div>
+  </form>
+
+</div>

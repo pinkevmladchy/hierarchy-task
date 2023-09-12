@@ -1,0 +1,113 @@
+:host {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  outline: none;
+  height: 100%;
+
+  .fc-container {
+    display: flex;
+    flex: 1;
+    flex-direction: row;
+    overflow: hidden;
+  }
+
+  .fc-left-pane {
+    flex: 0.15;
+    overflow-x: hidden;
+    overflow-y: auto;
+    min-width: 250px;
+
+    #tb-data-models-list-canvas {
+      background: white;
+    }
+  }
+
+  .fc-central-panel-overlay {
+    position: relative;
+    flex: 0.6;
+    display: flex;
+    overflow: auto;
+
+    .fc-central-pane {
+      overflow: auto;
+      width: 100%;
+
+      .fc-canvas {
+
+      }
+
+      .button-overlay {
+        display: flex;
+        gap: 10px;
+        right: 20px;
+      }
+    }
+
+    .button-overlay {
+      position: absolute;
+      display: flex;
+      gap: 10px;
+      top: 40px;
+      right: 20px;
+      z-index: 10;
+    }
+  }
+
+  .fc-divider {
+    width: 3px;
+    background-color: grey;
+  }
+
+  .fc-right-pane {
+    flex: 0.25;
+    overflow: auto;
+    min-width: 250px;
+    position: relative;
+  }
+}
+
+:host ::ng-deep {
+  .tb-nav-tree-container {
+    &.jstree-proton {
+      .jstree-anchor {
+        div.node-icon {
+          display: inline-block;
+          width: 22px;
+          height: 22px;
+          margin-right: 2px;
+          margin-bottom: 2px;
+          background-color: transparent;
+          background-repeat: no-repeat;
+          background-attachment: scroll;
+          background-position: center center;
+          background-size: 18px 18px;
+        }
+
+        mat-icon.node-icon {
+          width: 22px;
+          min-width: 22px;
+          height: 22px;
+          min-height: 22px;
+          margin-right: 2px;
+          margin-bottom: 2px;
+          color: inherit;
+          vertical-align: middle;
+
+          &.material-icons {
+            font-size: 18px;
+            line-height: 22px;
+            text-align: center;
+          }
+        }
+
+        &.jstree-hovered:not(.jstree-clicked),
+        &.jstree-disabled {
+          div.node-icon {
+            opacity: .5;
+          }
+        }
+      }
+    }
+  }
+}

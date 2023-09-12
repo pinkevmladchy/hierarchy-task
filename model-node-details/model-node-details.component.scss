@@ -1,0 +1,55 @@
+:host {
+  .mat-content {
+    min-height: 500px;
+    min-width: 400px;
+  }
+
+  .td-model-main-data {
+    padding: 25px;
+  }
+
+  .td-model-additional-data {
+    padding: 16px;
+
+    .table-container {
+      border-radius: 4px;
+      width: 100%;
+      max-height: 350px;
+      min-height: 350px;
+      overflow: auto;
+
+      mat-form-field::ng-deep {
+        .mat-mdc-form-field-subscript-wrapper {
+          display: none;
+        }
+      }
+
+      .cell-with-icon {
+        mat-icon {
+          vertical-align: bottom;
+          margin-right: 10px;
+        }
+      }
+
+      .mat-row {
+        height: auto;
+      }
+
+      .mat-cell {
+        padding: 8px 8px 8px 0;
+      }
+    }
+
+    .tb-outline-wrapper {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      height: 100%;
+      box-shadow: 0 0 #0003, 0 0 #00000024, 0 0 #0000001f;
+      border: solid 1px #e0e0e0;
+      border-radius: 4px;
+
+
+    }
+  }
+}

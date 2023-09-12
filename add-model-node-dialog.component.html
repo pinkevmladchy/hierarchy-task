@@ -1,0 +1,43 @@
+<div class="dialog-container">
+  <header>
+    <mat-toolbar color="primary">
+      <h2>{{modelNode.added ? 'Edit' : 'Add'}} model node</h2>
+      <span fxFlex>: {{modelNode.name}}</span>
+      <div [tb-help]="helpLinkIdForRuleNodeType()"></div>
+      <button mat-icon-button
+              (click)="cancel()"
+              type="button">
+        <mat-icon class="material-icons">close</mat-icon>
+      </button>
+    </mat-toolbar>
+  </header>
+  <form (ngSubmit)="save()">
+    <mat-progress-bar color="warn" mode="indeterminate" *ngIf="isLoading$ | async">
+    </mat-progress-bar>
+
+    <fieldset [disabled]="isLoading$ | async">
+      <tb-model-node-details #tbModelNode
+                             [modelNodesSavedNamesList]="modelNodesSavedNamesList"
+                             [modelNode]="modelNode">
+      </tb-model-node-details>
+    </fieldset>
+
+    <div mat-dialog-actions fxLayoutAlign="end center">
+      <button mat-button color="primary"
+              type="button"
+              [disabled]="(isLoading$ | async)"
+              (click)="cancel()">
+        {{ 'action.cancel' | translate }}
+      </button>
+
+      <button mat-raised-button color="primary"
+              type="submit"
+              [disabled]="(isLoading$ | async)
+              || tbModelNode.modelNodeFormGroup?.invalid
+      ">
+        {{ modelNode.added ? 'Save' : 'Add' }}
+      </button>
+    </div>
+  </form>
+
+</div>

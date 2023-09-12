@@ -1,0 +1,133 @@
+<div class="mat-content">
+  <fieldset [disabled]="(isLoading$ | async)">
+    <mat-tab-group mat-stretch-tabs="false" class="mat-mdc-tab-group tb-widget-config tb-absolute-fill mat-primary"
+                   (selectedTabChange)="onSetCurrentDataSource($event)">
+      <mat-tab label="Data">
+        <form [formGroup]="modelNodeFormGroup">
+          <section class="td-model-main-data">
+            <mat-form-field fxFlex class="mat-block">
+              <mat-label>Name</mat-label>
+              <input matInput formControlName="name" required (change)="onChangeModelNodeName()">
+              <mat-error *ngIf="modelNodeFormGroup.controls['name'].hasError('uniqueValue')">
+                The name must be unique
+              </mat-error>
+            </mat-form-field>
+            <mat-form-field class="mat-block" *ngIf="modelNode.type !== modelElementType.TENANT">
+              <mat-label>Element type</mat-label>
+              <mat-select required formControlName="type" (selectionChange)="onChangeModelNodeType()">
+                <mat-option *ngFor="let elementType of modelElementTypes" [value]="elementType">
+                  {{ elementType }}
+                </mat-option>
+              </mat-select>
+            </mat-form-field>
+
+            <ng-container *ngIf="modelNode.type === modelElementType.CUSTOMER">
+              <mat-slide-toggle class="root-state-entity-switch" (change)="onChangeModelNodeSelfRegistration($event)"
+                                formControlName="selfRegistration">
+              </mat-slide-toggle>
+              <label class="tb-small root-state-entity-label">Self registration</label>
+            </ng-container>
+          </section>
+        </form>
+      </mat-tab>
+
+      <ng-container *ngFor="let fieldType of additionalFieldsTableSchema">
+        <mat-tab [label]="fieldType.multipleName">
+          <section class="td-model-additional-data">
+            <div class="tb-outline-wrapper">
+              <mat-toolbar class="mat-mdc-table-toolbar">
+                <div class="mat-toolbar-tools">
+                  <span class="tb-entity-table-title"></span>
+                  <span fxFlex>{{fieldType.multipleName}} list</span>
+                  <button mat-icon-button [disabled]="isLoading$ | async"
+                          type="button"
+                          (click)="addField()"
+                          matTooltip="Add {{fieldType.singleName}}"
+                          matTooltipPosition="above">
+                    <mat-icon>add</mat-icon>
+                  </button>
+                </div>
+              </mat-toolbar>
+
+              <div fxFlex class="table-container">
+                <table *ngIf="modelNode.additionalFields[currentTabType]?.length" mat-table [dataSource]="currentDataSource"
+                       matSort [matSortActive]="'true'" matSortDisableClear>
+                  <ng-container matColumnDef="position" sticky>
+                    <mat-header-cell *matHeaderCellDef style="width: 40px;">
+                      No.
+                    </mat-header-cell>
+                    <mat-cell *matCellDef="let element; let idx = index">
+                      {{idx + 1}}
+                    </mat-cell>
+                  </ng-container>
+                  <ng-container matColumnDef="name" sticky>
+                    <mat-header-cell *matHeaderCellDef style="min-width: 40px;">
+                      Name
+                    </mat-header-cell>
+                    <mat-cell *matCellDef="let element">
+                      {{element.name}}
+                    </mat-cell>
+                  </ng-container>
+
+                  <ng-container *ngIf="currentTabType === AdditionalFields.ATTRIBUTES" matColumnDef="type" >
+                    <mat-header-cell *matHeaderCellDef style="min-width: 40px;">
+                      Type
+                    </mat-header-cell>
+                    <mat-cell *matCellDef="let element">
+                      <div class="cell-with-icon">
+                        <mat-icon svgIcon="{{ valueTypes.get(element.type)?.icon }}"></mat-icon>
+                        <span>{{ valueTypes.get(element.type)?.name | translate }}</span>
+                      </div>
+                    </mat-cell>
+                  </ng-container>
+
+                  <ng-container matColumnDef="actions" stickyEnd>
+                    <mat-header-cell *matHeaderCellDef [ngStyle.gt-md]="{ minWidth: (cellActionDescriptors.length * 48) + 'px',
+                                                                    maxWidth: (cellActionDescriptors.length * 48) + 'px',
+                                                                    width: (cellActionDescriptors.length * 48) + 'px' }">
+                    </mat-header-cell>
+                    <mat-cell *matCellDef="let element; let idx = index" [ngStyle.gt-md]="{ minWidth: (cellActionDescriptors.length * 48) + 'px',
+                                                                    maxWidth: (cellActionDescriptors.length * 48) + 'px',
+                                                                    width: (cellActionDescriptors.length * 48) + 'px' }">
+                      <div fxHide fxShow.gt-md fxFlex fxLayout="row" fxLayoutAlign="end">
+                        <button mat-icon-button [disabled]="(isLoading$ | async) || !actionDescriptor.isEnabled(element)"
+                                *ngFor="let actionDescriptor of cellActionDescriptors"
+                                matTooltip="{{ actionDescriptor.nameFunction ? actionDescriptor.nameFunction(element) : actionDescriptor.name }}"
+                                matTooltipPosition="above"
+                                (click)="actionDescriptor.onAction($event, idx, element)">
+                          <mat-icon svgIcon="{{ actionDescriptor.mdiIconFunction ? actionDescriptor.mdiIconFunction(element) : actionDescriptor.mdiIcon }}"
+                                    [ngStyle]="actionDescriptor.style">
+                            {{actionDescriptor.icon}}</mat-icon>
+                        </button>
+                      </div>
+                      <div fxHide fxShow.lt-lg *ngIf="cellActionDescriptors.length">
+                        <button mat-icon-button
+                                (click)="$event.stopPropagation(); $event.preventDefault();"
+                                [matMenuTriggerFor]="cellActionsMenu">
+                          <mat-icon class="material-icons">more_vert</mat-icon>
+                        </button>
+                        <mat-menu #cellActionsMenu="matMenu" xPosition="before">
+                          <button mat-menu-item *ngFor="let actionDescriptor of cellActionDescriptors"
+                                  [disabled]="isLoading$ | async"
+                                  [fxShow]="actionDescriptor.isEnabled(element)"
+                                  (click)="actionDescriptor.onAction($event, idx, element)">
+                            <mat-icon svgIcon="{{ actionDescriptor.mdiIconFunction ? actionDescriptor.mdiIconFunction(element) : actionDescriptor.mdiIcon }}"
+                                      [ngStyle]="actionDescriptor.style">
+                              {{actionDescriptor.icon}}</mat-icon>
+                            <span>{{ actionDescriptor.nameFunction ? actionDescriptor.nameFunction(element) : actionDescriptor.name }}</span>
+                          </button>
+                        </mat-menu>
+                      </div>
+                    </mat-cell>
+                  </ng-container>
+                  <mat-header-row [ngClass]="{'mat-row-select': true}" *matHeaderRowDef="displayedColumns; sticky: true"></mat-header-row>
+                  <mat-row *matRowDef="let row; columns: displayedColumns;"></mat-row>
+                </table>
+              </div>
+            </div>
+          </section>
+        </mat-tab>
+      </ng-container>
+    </mat-tab-group>
+  </fieldset>
+</div>

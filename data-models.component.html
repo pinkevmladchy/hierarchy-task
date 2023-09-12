@@ -1,0 +1,68 @@
+<div class="fc-container">
+  <div class="fc-left-pane">
+    <fc-canvas id="tb-data-models-list-canvas" [model]="nodeTypesModel" [selectedObjects]="nodeTypesFlowchartSelected"
+               [automaticResize]="false"
+               [dropTargetId]="'fc-target-canvas'">
+    </fc-canvas>
+  </div>
+  <div class="fc-divider">
+  </div>
+
+    <div class="fc-central-panel-overlay">
+        <div class="button-overlay layout-wrap tb-footer-buttons">
+            <button [disabled]="(isLoading$ | async) || !modelChanged"
+                    mat-fab color="accent" class="tb-btn-footer"
+                    (click)="onSaveModel()"
+                    matTooltip="Save schema"
+                    matTooltipPosition="above">
+                <mat-icon>done</mat-icon>
+            </button>
+          <button [disabled]="(isLoading$ | async) || !modelChanged || !savedModel"
+                  mat-fab color="accent" class="tb-btn-footer"
+                  (click)="onCancelChanges()"
+                  matTooltip="Cancel changes"
+                  matTooltipPosition="above">
+            <mat-icon>close</mat-icon>
+          </button>
+          <button [disabled]="(isLoading$ | async)"
+                  mat-fab color="accent" class="tb-btn-footer"
+                  (click)="onGenerateDashboard()"
+                  matTooltip="Generate dashboard"
+                  matTooltipPosition="above">
+            G
+          </button>
+            <button [disabled]="(isLoading$ | async) || model.nodes.length <= 1"
+                    mat-fab color="accent" class="tb-btn-footer"
+                    (click)="onDeleteModel()"
+                    matTooltip="Reset model"
+                    matTooltipPosition="above">
+                <mat-icon>delete</mat-icon>
+            </button>
+            <!--      <button (click)="addNewNode()" title="Add a new node to then chart">Add Node</button>-->
+            <!--      <button (click)="deleteSelected()"-->
+            <!--              [disabled]="!dateModelChainCanvas.modelService || (dateModelChainCanvas.modelService.nodes.getSelectedNodes().length === 0 &&-->
+            <!--                          dateModelChainCanvas.modelService.edges.getSelectedEdges().length === 0)"-->
+            <!--              title="Delete selected nodes and connections">Delete Selected</button>-->
+            <!--      <button (click)="activateWorkflow()">-->
+            <!--        Activate Workflow-->
+            <!--      </button>-->
+        </div>
+        <div class="fc-central-pane">
+            <fc-canvas #dateModelChainCanvas
+                       id="fc-target-canvas"
+                       [model]="model"
+                       [selectedObjects]="flowchartSelected"
+                       [edgeStyle]="flowchartConstants.curvedStyle"
+                       [userCallbacks]="editCallbacks"
+                       [automaticResize]="true"
+                       (modelChanged)="onModelChanged()"
+                       [dragAnimation]="flowchartConstants.dragAnimationRepaint">
+            </fc-canvas>
+        </div>
+    </div>
+
+  <div class="fc-divider">
+  <div class="fc-right-pane" *ngIf="showTree">
+    <tb-nav-tree [loadNodes]="loadNodes" [editCallbacks]="nodeEditCallbacks"></tb-nav-tree>
+  </div>
+</div>
