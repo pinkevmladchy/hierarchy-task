@@ -194,7 +194,6 @@ export class DataModelsComponent implements OnInit {
   }
 
   public onModelChanged() {
-    console.log('CHANGED');
     this.modelChanged = true;
   }
 
@@ -257,7 +256,7 @@ export class DataModelsComponent implements OnInit {
     }
 
     const additionalFields: ModelAdditionalFieldsObj = Object.keys(AdditionalFieldsTypes)
-      .map(name => ({ [name]: [] })) as ModelAdditionalFieldsObj;
+        .map(name => ({ [name]: [] })) as ModelAdditionalFieldsObj;
 
     const newNode: FcModelNode = {
       name: nodeName,
@@ -284,11 +283,11 @@ export class DataModelsComponent implements OnInit {
 
   public onSaveModel() {
     this.attributeService.saveEntityAttributes(this.tenantId, AttributeScope.SERVER_SCOPE,
-      [{key: 'model', value: JSON.stringify(this.model)}])
-      .subscribe(() => {
-        this.setSavedModel();
-        this.modelChanged = false;
-      });
+        [{key: 'model', value: JSON.stringify(this.model)}])
+        .subscribe(() => {
+          this.setSavedModel();
+          this.modelChanged = false;
+        });
   }
 
   public onGenerateDashboard() {
@@ -299,7 +298,7 @@ export class DataModelsComponent implements OnInit {
     const dashboard = this.dataModelsService.createDashboard(tree, this.ctx);
     console.log('TREE', tree);
     this.importExportService.processImportedDashboard(dashboard as Dashboard, null).subscribe(data => {
-        console.log(data);
+      console.log(data);
     });
   }
 
@@ -341,29 +340,37 @@ export class DataModelsComponent implements OnInit {
     this.inputConnectorId = this.nextConnectorID++;
 
     this.model.nodes.push(
-      {
-        id: (this.nextNodeID++).toString(), // todo maybe change to number
-        name: 'Tenant',
-        type: ModelElementType.TENANT,
-        readonly: true,
-        added: true,
-        additionalFields: {},
-        x: 50,
-        y: 100,
-        connectors: [
-          {
-            type: FlowchartConstants.rightConnectorType,
-            id: this.inputConnectorId + ''
-          },
-        ]
-      }
+        {
+          id: (this.nextNodeID++).toString(), // todo maybe change to number
+          name: 'Tenant',
+          type: ModelElementType.TENANT,
+          readonly: true,
+          added: true,
+          additionalFields: {},
+          x: 50,
+          y: 100,
+          connectors: [
+            {
+              type: FlowchartConstants.rightConnectorType,
+              id: this.inputConnectorId + ''
+            },
+          ]
+        }
     );
   }
 
-  private processModelEdge(edge: FcEdge, mode: 'add' | 'edit') {
-    const modelEdgeCopy = deepClone(edge);
+  private processModelEdge(modelEdge: FcEdge, mode: 'add' | 'edit') {
+    if (!this.checkCanCreateRelation(modelEdge)) {
+      this.flowchartSelected = [modelEdge];
+      setTimeout(() => {
+        this.dateModelChainCanvas.modelService.edges.delete(modelEdge);
+      }, 100);
+      return;
+    }
+
+    const modelEdgeCopy = deepClone(modelEdge);
     const edgesNamesList = this.model.edges.map(edge => edge.label);
-    const otherEdgesNamesList = mode === 'add' ? edgesNamesList : this.removeCurrentNameFromArray(edgesNamesList, edge.label);
+    const otherEdgesNamesList = mode === 'add' ? edgesNamesList : this.removeCurrentNameFromArray(edgesNamesList, modelEdge.label);
     this.dialog.open<AddModelEdgeDialogComponent, AddModelEdgeDialogData>(AddModelEdgeDialogComponent, {
       disableClose: true,
       panelClass: [],
@@ -373,16 +380,31 @@ export class DataModelsComponent implements OnInit {
       }
     }).afterClosed().subscribe((newModelEdge: FcEdge) => {
       if (newModelEdge) {
-          if (mode === 'add') {
-              edge.label = newModelEdge.label;
-          } else if (mode === 'edit') {
-              edge.label = newModelEdge.label;
-          }
-          this.modelChanged = true;
-          this.dateModelChainCanvas.modelService.detectChanges();
-          this.cdr.markForCheck();
+        if (mode === 'add') {
+          modelEdge.label = newModelEdge.label;
+        } else if (mode === 'edit') {
+          modelEdge.label = newModelEdge.label;
+        }
+        this.modelChanged = true;
+        this.dateModelChainCanvas.modelService.detectChanges();
+        this.cdr.markForCheck();
       }
     });
+  }
+
+  private checkCanCreateRelation(modelEdge: FcEdge): boolean {
+    console.log('modelEdge', modelEdge);
+
+    const startNode = this.model.nodes.find(n => n.connectors.some(c => c.id === modelEdge.source));
+    const endNode = this.model.nodes.find(n => n.connectors.some(c => c.id === modelEdge.destination));
+
+    if ((startNode.type === ModelElementType.ASSET || startNode.type === ModelElementType.DEVICE)
+        && endNode.type === ModelElementType.CUSTOMER) {
+      alert('You cannot connect a customer with this type.');
+      return false;
+    }
+
+    return true;
   }
 
   private processModelNode(modelNode: FcModelNode, mode: 'add' | 'edit') {
@@ -397,18 +419,18 @@ export class DataModelsComponent implements OnInit {
         modelNodesSavedNamesList: otherNodeNamesList
       }
     }).afterClosed().subscribe(
-      (newModelNode: FcModelNode) => {
-        if (newModelNode) {
-         if (mode === 'add') {
-           this.addModelNode(newModelNode);
-         } else if (mode === 'edit') {
-           this.editModelNode(newModelNode);
-         }
-          this.modelChanged = true;
-          this.dateModelChainCanvas.modelService.detectChanges();
-          this.cdr.markForCheck();
+        (newModelNode: FcModelNode) => {
+          if (newModelNode) {
+            if (mode === 'add') {
+              this.addModelNode(newModelNode);
+            } else if (mode === 'edit') {
+              this.editModelNode(newModelNode);
+            }
+            this.modelChanged = true;
+            this.dateModelChainCanvas.modelService.detectChanges();
+            this.cdr.markForCheck();
+          }
         }
-      }
     );
   }
 
@@ -481,9 +503,9 @@ export class DataModelsComponent implements OnInit {
       this.schemaTree.forEach(customer => {
         this.getChildrenRequest(customer, entityArray).then(res => {
           console.log('entityArray', entityArray.length);
-          cb(entityArray)
+          cb(entityArray);
         });
-      })
+      });
     }
   };
 
@@ -501,7 +523,7 @@ export class DataModelsComponent implements OnInit {
             const relationFilter = {
               relType: child.data.relationType,
               entityType: child.type
-            }
+            };
 
             const searchQuery = this.buildSearchQuery(relationFilter, entityId);
             response = await this.relationService.findInfoByQuery(searchQuery).toPromise();
@@ -529,7 +551,7 @@ export class DataModelsComponent implements OnInit {
               const relationFilter = {
                 relType: child.data.relationType,
                 entityType: child.type
-              }
+              };
               for (const entity of parent.entities) {
                 const searchQuery = this.buildSearchQuery(relationFilter, entity.data.id);
                 response = await this.relationService.findInfoByQuery(searchQuery).toPromise();
@@ -558,7 +580,7 @@ export class DataModelsComponent implements OnInit {
           }
 
           await this.getChildrenRequest(child, array, responseMap);
-        })
+        });
 
         await Promise.all(childPromises);;
       }
@@ -581,7 +603,7 @@ export class DataModelsComponent implements OnInit {
         direction: EntitySearchDirection.FROM,
         maxLevel: 1
       }
-    }
+    };
 
     return newSearchQuery;
   }
@@ -657,10 +679,9 @@ export class DataModelsComponent implements OnInit {
     return maxLevel;
   }
 
-
   private getSavedModelFromTenantAttribute() {
     this.attributeService.getEntityAttributes(this.tenantId,
-      AttributeScope.SERVER_SCOPE, ['model']).subscribe(data => {
+        AttributeScope.SERVER_SCOPE, ['model']).subscribe(data => {
       const savedModelJson = data[0]?.value;
       if (savedModelJson) {
         const savedModel = JSON.parse(savedModelJson);
