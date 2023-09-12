@@ -24,7 +24,7 @@
                   matTooltipPosition="above">
             <mat-icon>close</mat-icon>
           </button>
-          <button [disabled]="(isLoading$ | async)"
+          <button [disabled]="(isLoading$ | async) || !savedModel || modelChanged"
                   mat-fab color="accent" class="tb-btn-footer"
                   (click)="onGenerateDashboard()"
                   matTooltip="Generate dashboard"

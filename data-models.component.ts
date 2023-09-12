@@ -12,7 +12,7 @@ import {Observable, of} from 'rxjs';
 import {DELETE} from '@angular/cdk/keycodes';
 import {select, Store} from '@ngrx/store';
 import {AppState} from '@core/core.state';
-import {MatDialog} from '@angular/material/dialog';
+import {MatDialog, MatDialogConfig} from '@angular/material/dialog';
 import {deepClone} from '@core/utils';
 import {WidgetContext} from '@home/models/widget-component.models';
 import {LoadNodesCallback, NavTreeEditCallbacks, NavTreeNode} from '@shared/components/nav-tree.component';
@@ -30,7 +30,7 @@ import {
   AdditionalFieldsTypes, AddModelEdgeDialogData, AddModelNodeDialogData,
   FCDataModel,
   FcModelNode, ModelAdditionalFieldsObj,
-  ModelElementType
+  ModelElementType, SavedInAttributeModel
 } from '@home/components/widget/lib/settings/data-models/model-node.models';
 import {delay, share} from 'rxjs/operators';
 import {selectIsLoading} from '@core/interceptors/load.selectors';
@@ -44,6 +44,9 @@ import {
 import {DataModelsService} from "@home/components/widget/lib/settings/data-models/data-models.service";
 import {ImportExportService} from "@home/components/import-export/import-export.service";
 import {Dashboard} from "@shared/models/dashboard.models";
+import {ConfirmDialogComponent} from "@shared/components/dialog/confirm-dialog.component";
+import {DashboardService} from "@core/http/dashboard.service";
+import {AlertDialogComponent} from "@shared/components/dialog/alert-dialog.component";
 
 export type ModelTreeNode = Omit<NavTreeNode, 'children'> & {
   name?: string;
@@ -66,7 +69,7 @@ export interface HierarchyParentNavTreeNode extends Omit<NavTreeNode, 'children'
   parent?: string;
   children?: ModelTreeNode[];
   data: any;
-};
+}
 
 
 @Component({
@@ -121,7 +124,7 @@ export class DataModelsComponent implements OnInit {
     isValidEdge: (source, destination) => source.type === FlowchartConstants.rightConnectorType && destination.type === FlowchartConstants.leftConnectorType,
     createEdge: (event, edge) => {
       edge.label = 'New relation';
-      this.processModelEdge(edge, 'edit');
+      this.processModelEdge(edge, 'add');
       return of(edge);
     },
     dropNode: (event, node) => {
@@ -152,6 +155,7 @@ export class DataModelsComponent implements OnInit {
   public customersList: Customer[] = [];
 
   private tenantId!: EntityId;
+  private generatedDashboardId!: string | null;
 
   constructor(public dialog: MatDialog,
               private cdr: ChangeDetectorRef,
@@ -160,6 +164,7 @@ export class DataModelsComponent implements OnInit {
               private relationService: EntityRelationService,
               private dataModelsService: DataModelsService,
               private importExportService: ImportExportService,
+              private dashboardService: DashboardService,
               private store: Store<AppState>) {
     this.isLoading$ = this.store.pipe(delay(0), select(selectIsLoading), share());
     this.initData();
@@ -170,31 +175,10 @@ export class DataModelsComponent implements OnInit {
 
     const pageLink = new PageLink(100);
     this.customerService.getCustomers(pageLink).subscribe(res => this.customersList = res.data);
-    // this.attributeService.getEntityAttributes(this.tenantId,
-    //   AttributeScope.SERVER_SCOPE, ['model']).subscribe(data => {
-    //     const savedModelJson = data[0]?.value;
-    //     if (savedModelJson) {
-    //         const savedModel = JSON.parse(savedModelJson);
-    //         this.model.nodes = [];
-    //         this.model.edges = [];
-    //         this.model.nodes = savedModel.nodes;
-    //         this.model.edges = savedModel.edges;
-    //         this.setSavedModel();
-    //         this.schemaTree = this.generateHierarchyTree();
-    //         console.log('CREATED TREE', this.schemaTree);
-    //         if(this.schemaTree.length) {
-    //           this.showTree = true;
-    //         }
-    //     } else {
-    //         this.createDefaultModel();
-    //     }
-    // });
-
     this.getSavedModelFromTenantAttribute();
   }
 
   public onModelChanged() {
-    console.log('CHANGED');
     this.modelChanged = true;
   }
 
@@ -284,7 +268,7 @@ export class DataModelsComponent implements OnInit {
 
   public onSaveModel() {
     this.attributeService.saveEntityAttributes(this.tenantId, AttributeScope.SERVER_SCOPE,
-      [{key: 'model', value: JSON.stringify(this.model)}])
+      [{key: 'hierarchy-model', value: {generatedDashboardId: this.generatedDashboardId, model: JSON.stringify(this.model)}}])
       .subscribe(() => {
         this.setSavedModel();
         this.modelChanged = false;
@@ -292,15 +276,28 @@ export class DataModelsComponent implements OnInit {
   }
 
   public onGenerateDashboard() {
-    console.log('MODEL', this.model);
-    const tree: HierarchyParentNavTreeNode[] = this.generateHierarchyTree();
-    this.modelChanged = false;
-    this.dateModelChainCanvas.modelService.detectChanges();
-    const dashboard = this.dataModelsService.createDashboard(tree, this.ctx);
-    console.log('TREE', tree);
-    this.importExportService.processImportedDashboard(dashboard as Dashboard, null).subscribe(data => {
-        console.log(data);
-    });
+    if (this.generatedDashboardId) {
+      const dialogConfig: MatDialogConfig = {
+        disableClose: false,
+        data: {
+          title: 'Should you update your previous dashboard or create a new one?',
+          message: '',
+          cancel: 'Create new',
+          ok: 'Update previous'
+        }
+      };
+
+      this.dialog.open(ConfirmDialogComponent, dialogConfig).afterClosed().subscribe((confirmed: boolean) => {
+       if (confirmed) {
+         this.generateManagementDashboard(this.generatedDashboardId);
+       } else if (confirmed === false) {
+         console.log('confirmed', confirmed);
+         this.generateManagementDashboard(null);
+       }
+      });
+    } else {
+      this.generateManagementDashboard(null);
+    }
   }
 
   public onCancelChanges() {
@@ -360,10 +357,18 @@ export class DataModelsComponent implements OnInit {
     );
   }
 
-  private processModelEdge(edge: FcEdge, mode: 'add' | 'edit') {
-    const modelEdgeCopy = deepClone(edge);
+  private processModelEdge(modelEdge: FcEdge, mode: 'add' | 'edit') {
+    if (!this.checkCanCreateRelation(modelEdge)) {
+      this.flowchartSelected = [modelEdge];
+      setTimeout(() => {
+        this.dateModelChainCanvas.modelService.edges.delete(modelEdge);
+      }, 100);
+      return;
+    }
+
+    const modelEdgeCopy = deepClone(modelEdge);
     const edgesNamesList = this.model.edges.map(edge => edge.label);
-    const otherEdgesNamesList = mode === 'add' ? edgesNamesList : this.removeCurrentNameFromArray(edgesNamesList, edge.label);
+    const otherEdgesNamesList = mode === 'add' ? edgesNamesList : this.removeCurrentNameFromArray(edgesNamesList, modelEdge.label);
     this.dialog.open<AddModelEdgeDialogComponent, AddModelEdgeDialogData>(AddModelEdgeDialogComponent, {
       disableClose: true,
       panelClass: [],
@@ -374,15 +379,38 @@ export class DataModelsComponent implements OnInit {
     }).afterClosed().subscribe((newModelEdge: FcEdge) => {
       if (newModelEdge) {
           if (mode === 'add') {
-              edge.label = newModelEdge.label;
+            modelEdge.label = newModelEdge.label;
           } else if (mode === 'edit') {
-              edge.label = newModelEdge.label;
+            modelEdge.label = newModelEdge.label;
           }
           this.modelChanged = true;
           this.dateModelChainCanvas.modelService.detectChanges();
           this.cdr.markForCheck();
       }
     });
+  }
+
+  private checkCanCreateRelation(modelEdge: FcEdge): boolean {
+    console.log('modelEdge', modelEdge);
+
+    const startNode = this.model.nodes.find(n => n.connectors.some(c => c.id === modelEdge.source));
+    const endNode = this.model.nodes.find(n => n.connectors.some(c => c.id === modelEdge.destination));
+
+    if ((startNode.type === ModelElementType.ASSET || startNode.type === ModelElementType.DEVICE)
+      && endNode.type === ModelElementType.CUSTOMER) {
+      this.dialog.open(AlertDialogComponent, {
+        disableClose: true,
+        panelClass: [],
+        data: {
+          title: 'You cannot connect a customer with this type',
+          message: 'A customer can only be placed after a tenant or another customer',
+          ok: 'OK'
+        }
+      });
+      return false;
+    }
+
+    return true;
   }
 
   private processModelNode(modelNode: FcModelNode, mode: 'add' | 'edit') {
@@ -481,9 +509,9 @@ export class DataModelsComponent implements OnInit {
       this.schemaTree.forEach(customer => {
         this.getChildrenRequest(customer, entityArray).then(res => {
           console.log('entityArray', entityArray.length);
-          cb(entityArray)
+          cb(entityArray);
         });
-      })
+      });
     }
   };
 
@@ -501,7 +529,7 @@ export class DataModelsComponent implements OnInit {
             const relationFilter = {
               relType: child.data.relationType,
               entityType: child.type
-            }
+            };
 
             const searchQuery = this.buildSearchQuery(relationFilter, entityId);
             response = await this.relationService.findInfoByQuery(searchQuery).toPromise();
@@ -529,7 +557,7 @@ export class DataModelsComponent implements OnInit {
               const relationFilter = {
                 relType: child.data.relationType,
                 entityType: child.type
-              }
+              };
               for (const entity of parent.entities) {
                 const searchQuery = this.buildSearchQuery(relationFilter, entity.data.id);
                 response = await this.relationService.findInfoByQuery(searchQuery).toPromise();
@@ -558,7 +586,7 @@ export class DataModelsComponent implements OnInit {
           }
 
           await this.getChildrenRequest(child, array, responseMap);
-        })
+        });
 
         await Promise.all(childPromises);;
       }
@@ -581,7 +609,7 @@ export class DataModelsComponent implements OnInit {
         direction: EntitySearchDirection.FROM,
         maxLevel: 1
       }
-    }
+    };
 
     return newSearchQuery;
   }
@@ -651,7 +679,7 @@ export class DataModelsComponent implements OnInit {
     }
 
     if (parentLevel === 0) {
-      obj.maxLevel = maxLevel
+      obj.maxLevel = maxLevel;
     }
 
     return maxLevel;
@@ -660,10 +688,11 @@ export class DataModelsComponent implements OnInit {
 
   private getSavedModelFromTenantAttribute() {
     this.attributeService.getEntityAttributes(this.tenantId,
-      AttributeScope.SERVER_SCOPE, ['model']).subscribe(data => {
-      const savedModelJson = data[0]?.value;
-      if (savedModelJson) {
-        const savedModel = JSON.parse(savedModelJson);
+      AttributeScope.SERVER_SCOPE, ['hierarchy-model']).subscribe(data => {
+      const savedInAttributeModel = data[0]?.value as SavedInAttributeModel;
+      if (savedInAttributeModel) {
+        this.setGeneratedDashboardId(savedInAttributeModel.generatedDashboardId);
+        const savedModel = JSON.parse(savedInAttributeModel.model);
         this.model.nodes = [];
         this.model.edges = [];
         this.model.nodes = savedModel.nodes;
@@ -678,6 +707,32 @@ export class DataModelsComponent implements OnInit {
         this.createDefaultModel();
       }
     });
+  }
+
+  private setGeneratedDashboardId(id: string | null) {
+    this.dashboardService.getDashboards([id]).subscribe(dashboards => {
+      if (dashboards.length) {
+        this.generatedDashboardId = id;
+      } else {
+        this.generatedDashboardId = null;
+      }
+    });
+  }
+
+  private generateManagementDashboard(previousDashboardId: string | null) {
+    const tree: HierarchyParentNavTreeNode[] = this.generateHierarchyTree();
+    this.modelChanged = false;
+    this.dateModelChainCanvas.modelService.detectChanges();
+    const dashboard = this.dataModelsService.createDashboard(tree, this.ctx, previousDashboardId);
+    this.importExportService.processImportedDashboard(dashboard as Dashboard, null).subscribe(newManagementDashboard => {
+      this.generatedDashboardId = newManagementDashboard.id.id;
+      this.changeDashboardIdForSavedModel();
+    });
+  }
+  private changeDashboardIdForSavedModel() {
+    this.attributeService.saveEntityAttributes(this.tenantId, AttributeScope.SERVER_SCOPE,
+      [{key: 'hierarchy-model', value: {generatedDashboardId: this.generatedDashboardId, model: JSON.stringify(this.savedModel)}}])
+      .subscribe();
   }
   private findNextSavedModelElementsId() {
     this.nextNodeID = Math.max(...this.model.nodes.map(n => +n.id)) + 1;
