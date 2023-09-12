@@ -12,7 +12,7 @@ import {Observable, of} from 'rxjs';
 import {DELETE} from '@angular/cdk/keycodes';
 import {select, Store} from '@ngrx/store';
 import {AppState} from '@core/core.state';
-import {MatDialog} from '@angular/material/dialog';
+import {MatDialog, MatDialogConfig} from '@angular/material/dialog';
 import {deepClone} from '@core/utils';
 import {WidgetContext} from '@home/models/widget-component.models';
 import {LoadNodesCallback, NavTreeEditCallbacks, NavTreeNode} from '@shared/components/nav-tree.component';
@@ -30,7 +30,7 @@ import {
   AdditionalFieldsTypes, AddModelEdgeDialogData, AddModelNodeDialogData,
   FCDataModel,
   FcModelNode, ModelAdditionalFieldsObj,
-  ModelElementType
+  ModelElementType, SavedInAttributeModel
 } from '@home/components/widget/lib/settings/data-models/model-node.models';
 import {delay, share} from 'rxjs/operators';
 import {selectIsLoading} from '@core/interceptors/load.selectors';
@@ -44,6 +44,9 @@ import {
 import {DataModelsService} from "@home/components/widget/lib/settings/data-models/data-models.service";
 import {ImportExportService} from "@home/components/import-export/import-export.service";
 import {Dashboard} from "@shared/models/dashboard.models";
+import {ConfirmDialogComponent} from "@shared/components/dialog/confirm-dialog.component";
+import {DashboardService} from "@core/http/dashboard.service";
+import {AlertDialogComponent} from "@shared/components/dialog/alert-dialog.component";
 
 export type ModelTreeNode = Omit<NavTreeNode, 'children'> & {
   name?: string;
@@ -66,7 +69,7 @@ export interface HierarchyParentNavTreeNode extends Omit<NavTreeNode, 'children'
   parent?: string;
   children?: ModelTreeNode[];
   data: any;
-};
+}
 
 
 @Component({
@@ -121,7 +124,7 @@ export class DataModelsComponent implements OnInit {
     isValidEdge: (source, destination) => source.type === FlowchartConstants.rightConnectorType && destination.type === FlowchartConstants.leftConnectorType,
     createEdge: (event, edge) => {
       edge.label = 'New relation';
-      this.processModelEdge(edge, 'edit');
+      this.processModelEdge(edge, 'add');
       return of(edge);
     },
     dropNode: (event, node) => {
@@ -170,26 +173,6 @@ export class DataModelsComponent implements OnInit {
 
     const pageLink = new PageLink(100);
     this.customerService.getCustomers(pageLink).subscribe(res => this.customersList = res.data);
-    // this.attributeService.getEntityAttributes(this.tenantId,
-    //   AttributeScope.SERVER_SCOPE, ['model']).subscribe(data => {
-    //     const savedModelJson = data[0]?.value;
-    //     if (savedModelJson) {
-    //         const savedModel = JSON.parse(savedModelJson);
-    //         this.model.nodes = [];
-    //         this.model.edges = [];
-    //         this.model.nodes = savedModel.nodes;
-    //         this.model.edges = savedModel.edges;
-    //         this.setSavedModel();
-    //         this.schemaTree = this.generateHierarchyTree();
-    //         console.log('CREATED TREE', this.schemaTree);
-    //         if(this.schemaTree.length) {
-    //           this.showTree = true;
-    //         }
-    //     } else {
-    //         this.createDefaultModel();
-    //     }
-    // });
-
     this.getSavedModelFromTenantAttribute();
   }
 
@@ -256,7 +239,7 @@ export class DataModelsComponent implements OnInit {
     }
 
     const additionalFields: ModelAdditionalFieldsObj = Object.keys(AdditionalFieldsTypes)
-        .map(name => ({ [name]: [] })) as ModelAdditionalFieldsObj;
+      .map(name => ({ [name]: [] })) as ModelAdditionalFieldsObj;
 
     const newNode: FcModelNode = {
       name: nodeName,
@@ -283,23 +266,36 @@ export class DataModelsComponent implements OnInit {
 
   public onSaveModel() {
     this.attributeService.saveEntityAttributes(this.tenantId, AttributeScope.SERVER_SCOPE,
-        [{key: 'model', value: JSON.stringify(this.model)}])
-        .subscribe(() => {
-          this.setSavedModel();
-          this.modelChanged = false;
-        });
+      [{key: 'hierarchy-model', value: {generatedDashboardId: this.generatedDashboardId, model: JSON.stringify(this.model)}}])
+      .subscribe(() => {
+        this.setSavedModel();
+        this.modelChanged = false;
+      });
   }
 
   public onGenerateDashboard() {
-    console.log('MODEL', this.model);
-    const tree: HierarchyParentNavTreeNode[] = this.generateHierarchyTree();
-    this.modelChanged = false;
-    this.dateModelChainCanvas.modelService.detectChanges();
-    const dashboard = this.dataModelsService.createDashboard(tree, this.ctx);
-    console.log('TREE', tree);
-    this.importExportService.processImportedDashboard(dashboard as Dashboard, null).subscribe(data => {
-      console.log(data);
-    });
+    if (this.generatedDashboardId) {
+      const dialogConfig: MatDialogConfig = {
+        disableClose: false,
+        data: {
+          title: 'Should you update your previous dashboard or create a new one?',
+          message: '',
+          cancel: 'Create new',
+          ok: 'Update previous'
+        }
+      };
+
+      this.dialog.open(ConfirmDialogComponent, dialogConfig).afterClosed().subscribe((confirmed: boolean) => {
+       if (confirmed) {
+         this.generateManagementDashboard(this.generatedDashboardId);
+       } else if (confirmed === false) {
+         console.log('confirmed', confirmed);
+         this.generateManagementDashboard(null);
+       }
+      });
+    } else {
+      this.generateManagementDashboard(null);
+    }
   }
 
   public onCancelChanges() {
@@ -340,22 +336,22 @@ export class DataModelsComponent implements OnInit {
     this.inputConnectorId = this.nextConnectorID++;
 
     this.model.nodes.push(
-        {
-          id: (this.nextNodeID++).toString(), // todo maybe change to number
-          name: 'Tenant',
-          type: ModelElementType.TENANT,
-          readonly: true,
-          added: true,
-          additionalFields: {},
-          x: 50,
-          y: 100,
-          connectors: [
-            {
-              type: FlowchartConstants.rightConnectorType,
-              id: this.inputConnectorId + ''
-            },
-          ]
-        }
+      {
+        id: (this.nextNodeID++).toString(), // todo maybe change to number
+        name: 'Tenant',
+        type: ModelElementType.TENANT,
+        readonly: true,
+        added: true,
+        additionalFields: {},
+        x: 50,
+        y: 100,
+        connectors: [
+          {
+            type: FlowchartConstants.rightConnectorType,
+            id: this.inputConnectorId + ''
+          },
+        ]
+      }
     );
   }
 
@@ -370,7 +366,7 @@ export class DataModelsComponent implements OnInit {
 
     const modelEdgeCopy = deepClone(modelEdge);
     const edgesNamesList = this.model.edges.map(edge => edge.label);
-    const otherEdgesNamesList = mode === 'add' ? edgesNamesList : this.removeCurrentNameFromArray(edgesNamesList, modelEdge.label);
+    const otherEdgesNamesList = mode === 'add' ? edgesNamesList : this.removeCurrentNameFromArray(edgesNamesList, edge.label);
     this.dialog.open<AddModelEdgeDialogComponent, AddModelEdgeDialogData>(AddModelEdgeDialogComponent, {
       disableClose: true,
       panelClass: [],
@@ -380,14 +376,14 @@ export class DataModelsComponent implements OnInit {
       }
     }).afterClosed().subscribe((newModelEdge: FcEdge) => {
       if (newModelEdge) {
-        if (mode === 'add') {
-          modelEdge.label = newModelEdge.label;
-        } else if (mode === 'edit') {
-          modelEdge.label = newModelEdge.label;
-        }
-        this.modelChanged = true;
-        this.dateModelChainCanvas.modelService.detectChanges();
-        this.cdr.markForCheck();
+          if (mode === 'add') {
+            modelEdge.label = newModelEdge.label;
+          } else if (mode === 'edit') {
+            modelEdge.label = newModelEdge.label;
+          }
+          this.modelChanged = true;
+          this.dateModelChainCanvas.modelService.detectChanges();
+          this.cdr.markForCheck();
       }
     });
   }
@@ -399,8 +395,16 @@ export class DataModelsComponent implements OnInit {
     const endNode = this.model.nodes.find(n => n.connectors.some(c => c.id === modelEdge.destination));
 
     if ((startNode.type === ModelElementType.ASSET || startNode.type === ModelElementType.DEVICE)
-        && endNode.type === ModelElementType.CUSTOMER) {
-      alert('You cannot connect a customer with this type.');
+      && endNode.type === ModelElementType.CUSTOMER) {
+      this.dialog.open(AlertDialogComponent, {
+        disableClose: true,
+        panelClass: [],
+        data: {
+          title: 'You cannot connect a customer with this type',
+          message: 'A customer can only be placed after a tenant or another customer',
+          ok: 'OK'
+        }
+      });
       return false;
     }
 
@@ -419,18 +423,18 @@ export class DataModelsComponent implements OnInit {
         modelNodesSavedNamesList: otherNodeNamesList
       }
     }).afterClosed().subscribe(
-        (newModelNode: FcModelNode) => {
-          if (newModelNode) {
-            if (mode === 'add') {
-              this.addModelNode(newModelNode);
-            } else if (mode === 'edit') {
-              this.editModelNode(newModelNode);
-            }
-            this.modelChanged = true;
-            this.dateModelChainCanvas.modelService.detectChanges();
-            this.cdr.markForCheck();
-          }
+      (newModelNode: FcModelNode) => {
+        if (newModelNode) {
+         if (mode === 'add') {
+           this.addModelNode(newModelNode);
+         } else if (mode === 'edit') {
+           this.editModelNode(newModelNode);
+         }
+          this.modelChanged = true;
+          this.dateModelChainCanvas.modelService.detectChanges();
+          this.cdr.markForCheck();
         }
+      }
     );
   }
 
@@ -673,18 +677,20 @@ export class DataModelsComponent implements OnInit {
     }
 
     if (parentLevel === 0) {
-      obj.maxLevel = maxLevel
+      obj.maxLevel = maxLevel;
     }
 
     return maxLevel;
   }
 
+
   private getSavedModelFromTenantAttribute() {
     this.attributeService.getEntityAttributes(this.tenantId,
-        AttributeScope.SERVER_SCOPE, ['model']).subscribe(data => {
-      const savedModelJson = data[0]?.value;
-      if (savedModelJson) {
-        const savedModel = JSON.parse(savedModelJson);
+      AttributeScope.SERVER_SCOPE, ['hierarchy-model']).subscribe(data => {
+      const savedInAttributeModel = data[0]?.value as SavedInAttributeModel;
+      if (savedInAttributeModel) {
+        this.setGeneratedDashboardId(savedInAttributeModel.generatedDashboardId);
+        const savedModel = JSON.parse(savedInAttributeModel.model);
         this.model.nodes = [];
         this.model.edges = [];
         this.model.nodes = savedModel.nodes;
@@ -699,6 +705,32 @@ export class DataModelsComponent implements OnInit {
         this.createDefaultModel();
       }
     });
+  }
+
+  private setGeneratedDashboardId(id: string | null) {
+    this.dashboardService.getDashboards([id]).subscribe(dashboards => {
+      if (dashboards.length) {
+        this.generatedDashboardId = id;
+      } else {
+        this.generatedDashboardId = null;
+      }
+    });
+  }
+
+  private generateManagementDashboard(previousDashboardId: string | null) {
+    const tree: HierarchyParentNavTreeNode[] = this.generateHierarchyTree();
+    this.modelChanged = false;
+    this.dateModelChainCanvas.modelService.detectChanges();
+    const dashboard = this.dataModelsService.createDashboard(tree, this.ctx, previousDashboardId);
+    this.importExportService.processImportedDashboard(dashboard as Dashboard, null).subscribe(newManagementDashboard => {
+      this.generatedDashboardId = newManagementDashboard.id.id;
+      this.changeDashboardIdForSavedModel();
+    });
+  }
+  private changeDashboardIdForSavedModel() {
+    this.attributeService.saveEntityAttributes(this.tenantId, AttributeScope.SERVER_SCOPE,
+      [{key: 'hierarchy-model', value: {generatedDashboardId: this.generatedDashboardId, model: JSON.stringify(this.savedModel)}}])
+      .subscribe();
   }
   private findNextSavedModelElementsId() {
     this.nextNodeID = Math.max(...this.model.nodes.map(n => +n.id)) + 1;
