@@ -155,6 +155,7 @@ export class DataModelsComponent implements OnInit {
   public customersList: Customer[] = [];
 
   private tenantId!: EntityId;
+  private generatedDashboardId!: string | null;
 
   constructor(public dialog: MatDialog,
               private cdr: ChangeDetectorRef,
@@ -366,7 +367,7 @@ export class DataModelsComponent implements OnInit {
 
     const modelEdgeCopy = deepClone(modelEdge);
     const edgesNamesList = this.model.edges.map(edge => edge.label);
-    const otherEdgesNamesList = mode === 'add' ? edgesNamesList : this.removeCurrentNameFromArray(edgesNamesList, edge.label);
+    const otherEdgesNamesList = mode === 'add' ? edgesNamesList : this.removeCurrentNameFromArray(edgesNamesList, modelEdge.label);
     this.dialog.open<AddModelEdgeDialogComponent, AddModelEdgeDialogData>(AddModelEdgeDialogComponent, {
       disableClose: true,
       panelClass: [],
