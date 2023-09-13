@@ -601,7 +601,7 @@ export class DataModelsComponent implements OnInit {
       filters: [
         {
           relationType: rel.relType,
-          entityTypes: []
+          entityTypes: [rel.entityType]
         }
       ],
       parameters: {
