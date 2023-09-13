@@ -1,4 +1,13 @@
-import {ChangeDetectorRef, Component, Input, OnInit} from '@angular/core';
+import {
+  AfterViewInit,
+  ChangeDetectorRef,
+  Component,
+  EventEmitter,
+  Input,
+  OnDestroy,
+  OnInit,
+  Output
+} from '@angular/core';
 import {EntityType} from '@shared/models/entity-type.models';
 import {UntypedFormBuilder, UntypedFormGroup, Validators} from '@angular/forms';
 import {Store} from '@ngrx/store';
@@ -23,6 +32,7 @@ import {
 } from '@home/components/widget/lib/settings/data-models/model-node-details/model-node-details-add-field/model-node-details-add-field.component';
 import {MatSlideToggleChange} from '@angular/material/slide-toggle';
 import {uniqueValueValidator} from '@home/components/widget/lib/settings/data-models/data-models.utils';
+import {Subscription} from "rxjs";
 
 
 @Component({
@@ -30,14 +40,18 @@ import {uniqueValueValidator} from '@home/components/widget/lib/settings/data-mo
   templateUrl: './model-node-details.component.html',
   styleUrls: ['./model-node-details.component.scss']
 })
-export class ModelNodeDetailsComponent extends PageComponent implements OnInit {
+export class ModelNodeDetailsComponent extends PageComponent implements OnInit, AfterViewInit, OnDestroy {
   @Input() modelNode: FcModelNode;
   @Input() modelNodesSavedNamesList: string[];
+
+  @Output() fieldChanged = new EventEmitter<boolean>();
 
   entityType = EntityType;
   modelElementType = ModelElementType;
 
   modelNodeFormGroup: UntypedFormGroup;
+
+  private formSub!: Subscription;
 
   public cellActionDescriptors: Array<CustomCellActionDescriptor<ModelAdditionalField>> = [
     {
@@ -86,6 +100,16 @@ export class ModelNodeDetailsComponent extends PageComponent implements OnInit {
     this.buildForm();
   }
 
+  ngAfterViewInit() {
+   this.formSub = this.modelNodeFormGroup.statusChanges.subscribe(() => {
+      this.fieldChanged.emit(true);
+    });
+  }
+
+  ngOnDestroy() {
+    this.formSub.unsubscribe();
+  }
+
   public onChangeModelNodeType() {
     this.modelNode.type = this.modelNodeFormGroup.value.type;
     this.initAdditionalFields();
@@ -115,6 +139,7 @@ export class ModelNodeDetailsComponent extends PageComponent implements OnInit {
         if (data) {
           this.modelNode.additionalFields[data.type].push(data.field);
           this.updateCurrentDataSource();
+          this.fieldChanged.emit(true);
         }
       }
     );
@@ -125,6 +150,7 @@ export class ModelNodeDetailsComponent extends PageComponent implements OnInit {
     const additionalFields = this.modelNode.additionalFields[this.currentTabType];
     this.modelNode.additionalFields[this.currentTabType] = additionalFields.filter((f, idx) => idx !== index);
     this.updateCurrentDataSource();
+    this.fieldChanged.emit(true);
   }
 
   private editAdditionalField(index: number, field: ModelAdditionalField) {
@@ -141,6 +167,7 @@ export class ModelNodeDetailsComponent extends PageComponent implements OnInit {
         if (data) {
           this.modelNode.additionalFields[data.type][index] = data.field;
           this.updateCurrentDataSource();
+          this.fieldChanged.emit(true);
         }
       }
     );
@@ -160,7 +187,6 @@ export class ModelNodeDetailsComponent extends PageComponent implements OnInit {
 
   private updateCurrentDataSource() {
     this.currentDataSource.data = this.modelNode.additionalFields[this.currentTabType];
-    console.log('currentDataSource', this.currentDataSource)
   }
 
   private buildForm() {
