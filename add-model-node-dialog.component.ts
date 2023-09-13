@@ -19,10 +19,9 @@ import {DialogComponent} from '@shared/components/dialog.component';
 export class AddModelNodeDialogComponent extends DialogComponent<AddModelNodeDialogData>
   implements OnInit, ErrorStateMatcher {
 
-  @ViewChild('tbModelNode', {static: true}) modelNodeDetailsComponent: ModelNodeDetailsComponent;
-
   modelNode: FcModelNode;
   modelNodesSavedNamesList: string[];
+  public nodeChanged = false;
 
   submitted = false;
 
@@ -39,6 +38,10 @@ export class AddModelNodeDialogComponent extends DialogComponent<AddModelNodeDia
   }
 
   ngOnInit(): void {}
+
+  public onFiledChanged() {
+    this.nodeChanged = true;
+  }
 
   isErrorState(control: UntypedFormControl | null, form: FormGroupDirective | NgForm | null): boolean {
     const originalErrorState = this.errorStateMatcher.isErrorState(control, form);
@@ -59,9 +62,5 @@ export class AddModelNodeDialogComponent extends DialogComponent<AddModelNodeDia
     this.submitted = true;
     this.dialogRef.close(this.modelNode);
     this.cdr.markForCheck();
-    //this.modelNodeDetailsComponent.validate();
-    // if (this.ruleNodeDetailsComponent.ruleNodeFormGroup.valid) {
-    //   this.dialogRef.close(this.modelNode);
-    // }
   }
 }

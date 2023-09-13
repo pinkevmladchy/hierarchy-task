@@ -26,10 +26,6 @@ export class ModelnodeComponent extends FcNodeComponent implements OnInit, After
 
   ngOnInit(): void {
     super.ngOnInit();
-    console.log('NODE', this.node);
-    // if (this.node.iconUrl) {
-    //   this.iconUrl = this.sanitizer.bypassSecurityTrustResourceUrl(this.node.iconUrl);
-    // }
   }
 
   ngAfterViewInit() {

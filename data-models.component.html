@@ -29,7 +29,14 @@
                   (click)="onGenerateDashboard()"
                   matTooltip="Generate dashboard"
                   matTooltipPosition="above">
-            G
+            <mat-icon>dashboard</mat-icon>
+          </button>
+          <button [disabled]="(isLoading$ | async) || !savedModel || modelChanged"
+                  mat-fab color="accent" class="tb-btn-footer"
+                  (click)="onAutomaticFilling()"
+                  matTooltip="Automatic filling"
+                  matTooltipPosition="above">
+            <mat-icon>AG</mat-icon>
           </button>
             <button [disabled]="(isLoading$ | async) || model.nodes.length <= 1"
                     mat-fab color="accent" class="tb-btn-footer"

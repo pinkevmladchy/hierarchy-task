@@ -30,7 +30,7 @@ import {
   AdditionalFieldsTypes, AddModelEdgeDialogData, AddModelNodeDialogData,
   FCDataModel,
   FcModelNode, ModelAdditionalFieldsObj,
-  ModelElementType, SavedInAttributeModel
+  ModelElementType, ModelEntityValueType, SavedInAttributeModel
 } from '@home/components/widget/lib/settings/data-models/model-node.models';
 import {delay, share} from 'rxjs/operators';
 import {selectIsLoading} from '@core/interceptors/load.selectors';
@@ -47,6 +47,10 @@ import {Dashboard} from "@shared/models/dashboard.models";
 import {ConfirmDialogComponent} from "@shared/components/dialog/confirm-dialog.component";
 import {DashboardService} from "@core/http/dashboard.service";
 import {AlertDialogComponent} from "@shared/components/dialog/alert-dialog.component";
+import {
+  DataModelAutoGeneratorService
+} from "@home/components/widget/lib/settings/data-models/data-model-auto-generator.service";
+import {TenantId} from "@shared/models/id/tenant-id";
 
 export type ModelTreeNode = Omit<NavTreeNode, 'children'> & {
   name?: string;
@@ -154,17 +158,17 @@ export class DataModelsComponent implements OnInit {
 
   public customersList: Customer[] = [];
 
-  private tenantId!: EntityId;
+  private tenantId!: TenantId;
   private generatedDashboardId!: string | null;
 
   constructor(public dialog: MatDialog,
               private cdr: ChangeDetectorRef,
               private attributeService: AttributeService,
-              private customerService: CustomerService,
               private relationService: EntityRelationService,
               private dataModelsService: DataModelsService,
               private importExportService: ImportExportService,
               private dashboardService: DashboardService,
+              private dataModelAutoGeneratorService: DataModelAutoGeneratorService,
               private store: Store<AppState>) {
     this.isLoading$ = this.store.pipe(delay(0), select(selectIsLoading), share());
     this.initData();
@@ -172,9 +176,6 @@ export class DataModelsComponent implements OnInit {
 
   ngOnInit() {
     this.initTenantId();
-
-    const pageLink = new PageLink(100);
-    this.customerService.getCustomers(pageLink).subscribe(res => this.customersList = res.data);
     this.getSavedModelFromTenantAttribute();
   }
 
@@ -300,6 +301,10 @@ export class DataModelsComponent implements OnInit {
     }
   }
 
+  public onAutomaticFilling() {
+    this.dataModelAutoGeneratorService.autoGenerateHierarchyData(this.schemaTree, this.tenantId);
+  }
+
   public onCancelChanges() {
     if (this.savedModel) {
       this.model.nodes = deepClone(this.savedModel.nodes);
@@ -309,12 +314,8 @@ export class DataModelsComponent implements OnInit {
   }
 
   public onDeleteModel() {
-    this.attributeService.saveEntityAttributes(this.tenantId, AttributeScope.SERVER_SCOPE,
-        [{key: 'model', value: ''}])
-        .subscribe(() => {
-          this.createDefaultModel();
-          this.setSavedModel();
-        });
+    this.createDefaultModel();
+    this.modelChanged = true;
   }
 
   public activateWorkflow() {
@@ -699,6 +700,7 @@ export class DataModelsComponent implements OnInit {
         this.model.edges = savedModel.edges;
         this.setSavedModel();
         this.schemaTree = this.generateHierarchyTree();
+        console.log('TREE', this.schemaTree);
         if(this.schemaTree.length) {
           this.showTree = true;
         }
@@ -710,6 +712,10 @@ export class DataModelsComponent implements OnInit {
   }
 
   private setGeneratedDashboardId(id: string | null) {
+    if (!id) {
+      return this.generatedDashboardId = null;
+    }
+
     this.dashboardService.getDashboards([id]).subscribe(dashboards => {
       if (dashboards.length) {
         this.generatedDashboardId = id;

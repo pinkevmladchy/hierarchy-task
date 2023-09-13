@@ -18,7 +18,8 @@
     <fieldset [disabled]="isLoading$ | async">
       <tb-model-node-details #tbModelNode
                              [modelNodesSavedNamesList]="modelNodesSavedNamesList"
-                             [modelNode]="modelNode">
+                             [modelNode]="modelNode"
+                             (fieldChanged)="onFiledChanged()">
       </tb-model-node-details>
     </fieldset>
 
@@ -32,8 +33,7 @@
 
       <button mat-raised-button color="primary"
               type="submit"
-              [disabled]="(isLoading$ | async)
-              || tbModelNode.modelNodeFormGroup?.invalid
+              [disabled]="(isLoading$ | async) || tbModelNode.modelNodeFormGroup?.invalid || (modelNode.added && !nodeChanged)
       ">
         {{ modelNode.added ? 'Save' : 'Add' }}
       </button>
