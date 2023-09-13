@@ -18,8 +18,12 @@ import {NavTreeNode} from "@shared/components/nav-tree.component";
 export class DataModelsService {
   constructor(private utils: UtilsService) {}
 
-  public createDashboard(hierarchyParentNavTreeNode: HierarchyParentNavTreeNode[], ctx: WidgetContext) {
+  public createDashboard(hierarchyParentNavTreeNode: HierarchyParentNavTreeNode[], ctx: WidgetContext, previousDashboardId: string | null) {
     const result = this.generateDashboardJson(hierarchyParentNavTreeNode, ctx);
+    
+    if (previousDashboardId) {
+      result.id = {entityType: EntityType.DASHBOARD, id: previousDashboardId};
+    }
 
     return result;
   }
