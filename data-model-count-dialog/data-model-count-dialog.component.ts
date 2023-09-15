@@ -31,6 +31,7 @@
 
 import { Component, Inject } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
+import {FormBuilder, FormGroup, Validators} from "@angular/forms";
 
 export interface ConfirmDialogData {
   title: string;
@@ -41,11 +42,19 @@ export interface ConfirmDialogData {
 
 // @dynamic
 @Component({
-  selector: 'tb-regeneration-dashboard-dialog',
-  templateUrl: './regeneration-dashboard-dialog.component.html',
-  styleUrls: ['./regeneration-dashboard-dialog.component.scss']
+  selector: 'tb-data-model-count-dialog',
+  templateUrl: './data-model-count-dialog.component.html',
+  styleUrls: ['./data-model-count-dialog.component.scss']
 })
-export class RegenerationDashboardDialogComponent {
-  constructor(public dialogRef: MatDialogRef<RegenerationDashboardDialogComponent>,
-              @Inject(MAT_DIALOG_DATA) public data: ConfirmDialogData) {}
+export class DataModelCountDialogComponent {
+  form: FormGroup;
+  constructor(public dialogRef: MatDialogRef<DataModelCountDialogComponent>, private fb: FormBuilder) {
+    this.form = this.fb.group({
+      count: [1, [Validators.required, Validators.min(1), Validators.max(1)]]
+    });
+  }
+
+  public onOk() {
+    this.dialogRef.close(this.form.get('count').value);
+  }
 }

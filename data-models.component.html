@@ -31,7 +31,7 @@
                   matTooltipPosition="above">
             <mat-icon>dashboard</mat-icon>
           </button>
-          <button [disabled]="(isLoading$ | async) || !savedModel || modelChanged"
+          <button [disabled]="(isLoading$ | async) || !savedModel || modelChanged || !generatedDashboardId"
                   mat-fab color="accent" class="tb-btn-footer"
                   (click)="onAutomaticFilling()"
                   matTooltip="Automatic filling"

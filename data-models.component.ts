@@ -30,7 +30,7 @@ import {
   AdditionalFieldsTypes, AddModelEdgeDialogData, AddModelNodeDialogData,
   FCDataModel,
   FcModelNode, ModelAdditionalFieldsObj,
-  ModelElementType, ModelEntityValueType, SavedInAttributeModel
+  ModelElementType, SavedInAttributeModel
 } from '@home/components/widget/lib/settings/data-models/model-node.models';
 import {delay, share} from 'rxjs/operators';
 import {selectIsLoading} from '@core/interceptors/load.selectors';
@@ -47,10 +47,16 @@ import {Dashboard} from "@shared/models/dashboard.models";
 import {ConfirmDialogComponent} from "@shared/components/dialog/confirm-dialog.component";
 import {DashboardService} from "@core/http/dashboard.service";
 import {AlertDialogComponent} from "@shared/components/dialog/alert-dialog.component";
+import { EntityGroupService } from '@app/core/public-api';
+import {EntityGroup, EntityGroupConfiguration} from "@shared/models/entity-group.models";
+import {result} from "lodash";
 import {
   DataModelAutoGeneratorService
 } from "@home/components/widget/lib/settings/data-models/data-model-auto-generator.service";
 import {TenantId} from "@shared/models/id/tenant-id";
+import {
+  DataModelCountDialogComponent
+} from "@home/components/widget/lib/settings/data-models/data-model-count-dialog/data-model-count-dialog.component";
 
 
 export type ModelTreeNode = Omit<NavTreeNode, 'children'> & {
@@ -157,18 +163,20 @@ export class DataModelsComponent implements OnInit {
     }
   };
 
+  public generatedDashboardId!: string | null;
   public customersList: Customer[] = [];
-
   private tenantId!: TenantId;
-  private generatedDashboardId!: string | null;
+  private generatedDashboardGroupdId!: string | null;
 
   constructor(public dialog: MatDialog,
               private cdr: ChangeDetectorRef,
               private attributeService: AttributeService,
+              private customerService: CustomerService,
               private relationService: EntityRelationService,
               private dataModelsService: DataModelsService,
-              private importExportService: ImportExportService,
               private dashboardService: DashboardService,
+              private entityGroupService: EntityGroupService,
+              private importExportService: ImportExportService,
               private dataModelAutoGeneratorService: DataModelAutoGeneratorService,
               private store: Store<AppState>) {
     this.isLoading$ = this.store.pipe(delay(0), select(selectIsLoading), share());
@@ -177,6 +185,9 @@ export class DataModelsComponent implements OnInit {
 
   ngOnInit() {
     this.initTenantId();
+
+    const pageLink = new PageLink(100);
+    this.customerService.getCustomers(pageLink).subscribe(res => this.customersList = res.data);
     this.getSavedModelFromTenantAttribute();
   }
 
@@ -279,31 +290,57 @@ export class DataModelsComponent implements OnInit {
 
   public onGenerateDashboard() {
     if (this.generatedDashboardId) {
-      const dialogConfig: MatDialogConfig = {
-        disableClose: false,
-        data: {
-          title: 'Should you update your previous dashboard or create a new one?',
-          message: '',
-          cancel: 'Create new',
-          ok: 'Update previous'
-        }
-      };
+      this.dashboardService.getDashboards([this.generatedDashboardId]).subscribe(dashboards => {
+        if(dashboards.length){
+          const dialogConfig: MatDialogConfig = {
+            disableClose: false,
+            data: {
+              title: 'Should you update your previous dashboard or create a new one?',
+              message: '',
+              cancel: 'Create new',
+              ok: 'Update previous'
+            }
+          };
 
-      this.dialog.open(ConfirmDialogComponent, dialogConfig).afterClosed().subscribe((confirmed: boolean) => {
-       if (confirmed) {
-         this.generateManagementDashboard(this.generatedDashboardId);
-       } else if (confirmed === false) {
-         console.log('confirmed', confirmed);
-         this.generateManagementDashboard(null);
-       }
+          this.dialog.open(ConfirmDialogComponent, dialogConfig).afterClosed().subscribe((confirmed: boolean) => {
+            if (confirmed) {
+              this.generateManagementDashboard(this.generatedDashboardId);
+            } else if (confirmed === false) {
+              this.generateManagementDashboard(null);
+            }
+          });
+        } else {
+          this.generateManagementDashboard(null);
+        }
       });
     } else {
       this.generateManagementDashboard(null);
-    }
-  }
+    };
+  };
 
   public onAutomaticFilling() {
-    this.dataModelAutoGeneratorService.autoGenerateHierarchyData(this.schemaTree, this.tenantId);
+    this.dialog.open(DataModelCountDialogComponent).afterClosed().subscribe(
+      (count: number) => {
+        if (count) {
+          this.dashboardService.getDashboards([this.generatedDashboardId]).subscribe(dashboards => {
+            if(dashboards.length){
+              this.dataModelAutoGeneratorService.autoGenerateHierarchyData(this.schemaTree, this.tenantId, count);
+            } else {
+              this.generatedDashboardId = null;
+              this.dialog.open(AlertDialogComponent, {
+                disableClose: true,
+                panelClass: [],
+                data: {
+                  title: 'Dashboard is missing',
+                  message: 'First you need to generate a dashboard',
+                  ok: 'OK'
+                }
+              });
+            }
+          });
+        }
+      }
+    );
   }
 
   public onCancelChanges() {
@@ -315,8 +352,12 @@ export class DataModelsComponent implements OnInit {
   }
 
   public onDeleteModel() {
-    this.createDefaultModel();
-    this.modelChanged = true;
+    this.attributeService.saveEntityAttributes(this.tenantId, AttributeScope.SERVER_SCOPE,
+        [{key: 'model', value: ''}])
+        .subscribe(() => {
+          this.createDefaultModel();
+          this.setSavedModel();
+        });
   }
 
   public activateWorkflow() {
@@ -510,7 +551,6 @@ export class DataModelsComponent implements OnInit {
     if (this.schemaTree.length) {
       this.schemaTree.forEach(customer => {
         this.getChildrenRequest(customer, entityArray).then(res => {
-          console.log('entityArray', entityArray.length);
           cb(entityArray);
         });
       });
@@ -616,7 +656,6 @@ export class DataModelsComponent implements OnInit {
     return newSearchQuery;
   }
 
-
   private arrayToTree(array: HierarchyParentNavTreeNode[]) {
     const idToNodeMap: {[id: string]: HierarchyParentNavTreeNode} = {};
 
@@ -687,7 +726,6 @@ export class DataModelsComponent implements OnInit {
     return maxLevel;
   }
 
-
   private getSavedModelFromTenantAttribute() {
     this.attributeService.getEntityAttributes(this.tenantId,
       AttributeScope.SERVER_SCOPE, ['hierarchy-model']).subscribe(data => {
@@ -701,7 +739,6 @@ export class DataModelsComponent implements OnInit {
         this.model.edges = savedModel.edges;
         this.setSavedModel();
         this.schemaTree = this.generateHierarchyTree();
-        console.log('TREE', this.schemaTree);
         if(this.schemaTree.length) {
           this.showTree = true;
         }
@@ -713,36 +750,70 @@ export class DataModelsComponent implements OnInit {
   }
 
   private setGeneratedDashboardId(id: string | null) {
-    if (!id) {
-      return this.generatedDashboardId = null;
-    }
-
     this.dashboardService.getDashboards([id]).subscribe(dashboards => {
-      if (dashboards.length) {
-        this.generatedDashboardId = id;
-      } else {
-        this.generatedDashboardId = null;
-      }
-    });
+       if (dashboards.length) {
+         this.generatedDashboardId = id;
+       } else {
+         this.generatedDashboardId = null;
+       }
+     });
   }
 
   private generateManagementDashboard(previousDashboardId: string | null) {
+    this.generatedDashboardGroupdId = null;
+    if(previousDashboardId){
+      this.dashboardService.getDashboards([previousDashboardId]).subscribe(dashboards => {
+        if(dashboards.length){
+          this.generateDashboard(previousDashboardId);
+        }
+      });
+    }
+    else {
+      this.generateDashboard(previousDashboardId);
+    }
+  }
+
+  private generateDashboard(previousDashboardId: string | null){
     const tree: HierarchyParentNavTreeNode[] = this.generateHierarchyTree();
     this.modelChanged = false;
     this.dateModelChainCanvas.modelService.detectChanges();
     const dashboard = this.dataModelsService.createDashboard(tree, this.ctx, previousDashboardId);
-    this.importExportService.processImportedDashboard(dashboard as Dashboard, null).subscribe(newManagementDashboard => {
-      this.generatedDashboardId = newManagementDashboard.id.id;
-      this.changeDashboardIdForSavedModel();
+
+    let dashboardGroupObject = {
+      type: 'DASHBOARD',
+      name: 'Management Dashboard',
+      ownerId: this.tenantId,
+    };
+
+    this.entityGroupService.getEntityGroupsByOwnerId('TENANT' as EntityType, this.tenantId.id, 'DASHBOARD' as EntityType).subscribe(res=>{
+      if(res.find(x=>x.name == 'Management Dashboard')){
+        this.generatedDashboardGroupdId = res.find(x=>x.name == 'Management Dashboard').id.id;
+      }
+      if (this.generatedDashboardGroupdId){
+        this.importExportService.processImportedDashboard(dashboard as Dashboard, null, this.generatedDashboardGroupdId).subscribe(newManagementDashboard => {
+          this.generatedDashboardId = newManagementDashboard.id.id;
+          this.changeDashboardIdForSavedModel();
+        });
+      } else {
+        this.entityGroupService.saveEntityGroup(dashboardGroupObject as EntityGroup).subscribe((result)=>{
+          this.importExportService.processImportedDashboard(dashboard as Dashboard, null, result.id.id).subscribe(newManagementDashboard => {
+            this.generatedDashboardId = newManagementDashboard.id.id;
+            this.changeDashboardIdForSavedModel();
+          });
+        });
+      }
     });
   }
+
   private changeDashboardIdForSavedModel() {
     this.attributeService.saveEntityAttributes(this.tenantId, AttributeScope.SERVER_SCOPE,
       [{key: 'hierarchy-model', value: {generatedDashboardId: this.generatedDashboardId, model: JSON.stringify(this.savedModel)}}])
       .subscribe();
   }
+
   private findNextSavedModelElementsId() {
     this.nextNodeID = Math.max(...this.model.nodes.map(n => +n.id)) + 1;
     this.nextConnectorID = Math.max(...[].concat(...this.model.nodes.map(n => (n.connectors.map(c => +c.id))))) + 1;
   }
+
 }
