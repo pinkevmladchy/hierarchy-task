@@ -16,8 +16,8 @@ import {
   AddModelEdgeDialogComponent
 } from '@home/components/widget/lib/settings/data-models/add-model-edge-dialog.component';
 import {
-  RegenerationDashboardDialogComponent
-} from "@home/components/widget/lib/settings/data-models/regeneration-dashboard-dialog/regeneration-dashboard-dialog.component";
+  DataModelCountDialogComponent
+} from "@home/components/widget/lib/settings/data-models/data-model-count-dialog/data-model-count-dialog.component";
 
 
 @NgModule({
@@ -34,7 +34,7 @@ import {
     ModelNodeDetailsComponent,
     ModelNodeDetailsAddFieldComponent,
     AddModelEdgeDialogComponent,
-    RegenerationDashboardDialogComponent
+    DataModelCountDialogComponent
   ],
   providers: [
     {
