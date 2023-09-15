@@ -52,6 +52,7 @@ import {
 } from "@home/components/widget/lib/settings/data-models/data-model-auto-generator.service";
 import {TenantId} from "@shared/models/id/tenant-id";
 
+
 export type ModelTreeNode = Omit<NavTreeNode, 'children'> & {
   name?: string;
   children?: ModelTreeNode[];
