@@ -24,7 +24,7 @@ import {getCurrentAuthState} from '@core/auth/auth.selectors';
 import {AttributeScope} from '@shared/models/telemetry/telemetry.models';
 import {EntityType} from '@shared/models/entity-type.models';
 import {
-  AdditionalFieldsTypes, AddModelEdgeDialogData, AddModelNodeDialogData,
+  AdditionalFieldsTypes, AddModelEdgeDialogData, AddModelNodeDialogData, AutoGeneratingSettings,
   FCDataModel,
   FcModelNode, ModelAdditionalFieldsObj,
   ModelElementType, SavedInAttributeModel
@@ -276,7 +276,11 @@ export class DataModelsComponent implements OnInit {
 
   public onSaveModel() {
     this.attributeService.saveEntityAttributes(this.tenantId, AttributeScope.SERVER_SCOPE,
-      [{key: 'hierarchy-model', value: {generatedDashboardId: this.generatedDashboardId, model: JSON.stringify(this.model)}}])
+      [{key: 'hierarchy-model', value: {
+          generatedDashboardId: this.generatedDashboardId,
+          model: JSON.stringify(this.model)
+        },
+    }])
       .subscribe(() => {
         this.setSavedModel();
         this.modelChanged = false;
@@ -315,7 +319,7 @@ export class DataModelsComponent implements OnInit {
 
   public onAutomaticFilling() {
     this.dialog.open(DataModelCountDialogComponent).afterClosed().subscribe(
-      (data: {count: number; prefix: string}) => {
+      (data: AutoGeneratingSettings) => {
         if (data) {
           this.dashboardService.getDashboards([this.generatedDashboardId]).subscribe(dashboards => {
             if(dashboards.length){

@@ -1,5 +1,6 @@
 import {Injectable} from '@angular/core';
 import {
+  AutoGeneratingSettings,
   ModelAdditionalField,
   ModelElementType,
   ModelEntityValueType
@@ -15,10 +16,16 @@ import {Device} from '@shared/models/device.models';
 import {AttributeService} from "@core/http/attribute.service";
 import {delay, tap} from "rxjs/operators";
 import {EntityId} from "@shared/models/id/entity-id";
-import {AttributeData, AttributeScope, LatestTelemetry} from "@shared/models/telemetry/telemetry.models";
+import {
+  AttributeData,
+  AttributeScope,
+  LatestTelemetry,
+  TimeseriesData
+} from "@shared/models/telemetry/telemetry.models";
 import {EntityRelationService} from "@core/http/entity-relation.service";
 import {EntityRelation, RelationTypeGroup} from "@shared/models/relation.models";
 import {deepClone} from "@core/utils";
+import {HttpClient} from "@angular/common/http";
 
 @Injectable({
   providedIn: 'root'
@@ -26,6 +33,7 @@ import {deepClone} from "@core/utils";
 export class DataModelAutoGeneratorService {
   tenantId!: TenantId;
   public schemaTree: any[];
+  public createdEntities: EntityId[] = [];
   createEntitiesNumber = 1;
   namePrefix = '';
 
@@ -41,21 +49,26 @@ export class DataModelAutoGeneratorService {
   relationObservables: Observable<any>[] = [];
 
   constructor(private customerService: CustomerService,
+              private http: HttpClient,
               private assetService: AssetService,
               private deviceService: DeviceService,
               private attributeService: AttributeService,
               private entityRelationService: EntityRelationService) { }
 
-  public autoGenerateHierarchyData(schemaTree: any[], tenantId: TenantId, numberEntities: number): Observable<any> {
+  public autoGenerateHierarchyData(schemaTree: any[], tenantId: TenantId, autGeneratingSettings: AutoGeneratingSettings): Observable<any> {
     this.resetProperties();
 
-    this.createEntitiesNumber = numberEntities;
+    this.createEntitiesNumber = autGeneratingSettings.count;
+    this.namePrefix = autGeneratingSettings.prefix;
     this.tenantId = tenantId;
     this.schemaTree = deepClone(schemaTree);
     this.schemaTree[0].entities = [{id: tenantId}]; //tenant node doesn't have this field by default
     this.recursiveMoveToTree(this.createEntitiesObservables.bind(this), [ModelElementType.TENANT]);
     return this.executeRequestsList();
-    console.log('TREE 1', this.schemaTree);
+  }
+
+  private saveTimeSeries(entityId: EntityId, data: TelemetryEl[]): Observable<any> {
+    return this.http.post(`/api/plugins/telemetry/${entityId.entityType}/${entityId.id}/timeseries/timeseriesScope`, data);
   }
 
   private executeRequestsList(): Observable<any> {
@@ -65,7 +78,7 @@ export class DataModelAutoGeneratorService {
         tap(() => {
           this.createAdditionalItemsObservables();
           this.createDemoRelationsObservables();
-          console.log('TREE 2', this.schemaTree);
+          console.log('TREE 2', this.createdEntities);
         }),
         switchMap(() => {
           return this.relationObservables.length ? forkJoin(this.relationObservables) : of(null);
@@ -115,7 +128,7 @@ export class DataModelAutoGeneratorService {
         if (treeEl.data.telemetries?.length) {
           treeEl.data.telemetries.forEach(telemetry => {
             this.additionalElementsObservables.telemetries
-              .push(this.attributeService.saveEntityTimeseries(entity.id, 'timeseriesScope', this.createDemoTelemetry(telemetry)));
+              .push(this.saveTimeSeries(entity.id, this.createDemoTelemetry(telemetry)));
           });
         }
       });
@@ -152,17 +165,18 @@ export class DataModelAutoGeneratorService {
       return value;
   }
 
-  private createDemoTelemetry(telemetry: any): AttributeData[] {
+  private createDemoTelemetry(telemetry: any): TelemetryEl[] {
     const currentTime = Date.now();
     const oneHour = 60 * 60 * 1000;
     const oneWeek = 7 * 24 * oneHour;
     const result = [];
 
     for (let ts = currentTime - oneWeek; ts <= currentTime; ts += oneHour) {
-      const demoTelemetry: AttributeData = {
-        lastUpdateTs: ts,
-        key: telemetry.name,
-        value: this.randomIntFromInterval(1, 100)
+      const demoTelemetry: TelemetryEl = {
+        ts,
+        values: {
+          [telemetry.name]: this.randomIntFromInterval(1, 100)
+        }
       };
       result.push(demoTelemetry);
     }
@@ -199,6 +213,7 @@ export class DataModelAutoGeneratorService {
     this.customersCounter++;
     this.entitiesObservables.push({treeEl, obs: this.customerService.saveCustomer(newCustomer).pipe(
         tap(customer => {
+          this.createdEntities.push(customer.id);
           return treeEl.entities.push(customer);
         })
       )});
@@ -213,6 +228,7 @@ export class DataModelAutoGeneratorService {
     this.deviceCounter++;
     this.entitiesObservables.push({treeEl, obs: this.deviceService.saveDevice(newDevice).pipe(
         tap(device => {
+          this.createdEntities.push(device.id);
           return treeEl.entities.push(device);
         })
       )});
@@ -227,6 +243,7 @@ export class DataModelAutoGeneratorService {
     this.assetCounter++;
     this.entitiesObservables.push({treeEl, obs: this.assetService.saveAsset(newAsset).pipe(
         tap(asset => {
+          this.createdEntities.push(asset.id);
           return treeEl.entities.push(asset);
         })
       )});
@@ -293,4 +310,11 @@ export class DataModelAutoGeneratorService {
 }
 
 interface EntitiesObservable {treeEl: any; obs: Observable<any>}
+
+interface TelemetryEl {
+  ts: number;
+  values: {
+    [key: string]: number;
+  };
+}
 

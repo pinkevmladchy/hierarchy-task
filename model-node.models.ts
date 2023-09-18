@@ -1,7 +1,7 @@
-import {FcNode} from "ngx-flowchart";
-import {FcEdge} from "ngx-flowchart/lib/ngx-flowchart.models";
-import {ValueTypeData} from "@shared/models/constants";
-import {CellActionDescriptor} from "@home/models/entity/entities-table-config.models";
+import {FcNode} from 'ngx-flowchart';
+import {FcEdge} from 'ngx-flowchart/lib/ngx-flowchart.models';
+import {ValueTypeData} from '@shared/models/constants';
+import {CellActionDescriptor} from '@home/models/entity/entities-table-config.models';
 
 export interface FcModelNodeType extends FcNode {
   //component?: RuleNodeComponentDescriptor;
@@ -134,3 +134,8 @@ export const ModelEntityValueTypesMap = new Map<ModelEntityValueType, ValueTypeD
     ]
   ]
 );
+
+export interface AutoGeneratingSettings {
+  count: number;
+  prefix: string;
+}
