@@ -15,22 +15,19 @@ import {AppState} from '@core/core.state';
 import {MatDialog, MatDialogConfig} from '@angular/material/dialog';
 import {deepClone} from '@core/utils';
 import {WidgetContext} from '@home/models/widget-component.models';
-import {LoadNodesCallback, NavTreeEditCallbacks, NavTreeNode} from '@shared/components/nav-tree.component';
+import {NavTreeNode} from '@shared/components/nav-tree.component';
 import {Customer} from '@shared/models/customer.model';
 import {CustomerService} from '@core/http/customer.service';
-import {EntityRelationService} from '@core/http/entity-relation.service';
 import {PageLink} from '@shared/models/page/page-link';
-import {EntityRelationsQuery, EntitySearchDirection} from '@shared/models/relation.models';
 import {AttributeService} from '@core/http/attribute.service';
 import {getCurrentAuthState} from '@core/auth/auth.selectors';
 import {AttributeScope} from '@shared/models/telemetry/telemetry.models';
 import {EntityType} from '@shared/models/entity-type.models';
-import {EntityId} from '@shared/models/id/entity-id';
 import {
   AdditionalFieldsTypes, AddModelEdgeDialogData, AddModelNodeDialogData,
   FCDataModel,
   FcModelNode, ModelAdditionalFieldsObj,
-  ModelElementType, ModelEntityValueType, SavedInAttributeModel
+  ModelElementType, SavedInAttributeModel
 } from '@home/components/widget/lib/settings/data-models/model-node.models';
 import {delay, share} from 'rxjs/operators';
 import {selectIsLoading} from '@core/interceptors/load.selectors';
@@ -48,8 +45,7 @@ import {ConfirmDialogComponent} from "@shared/components/dialog/confirm-dialog.c
 import {DashboardService} from "@core/http/dashboard.service";
 import {AlertDialogComponent} from "@shared/components/dialog/alert-dialog.component";
 import { EntityGroupService } from '@app/core/public-api';
-import {EntityGroup, EntityGroupConfiguration} from "@shared/models/entity-group.models";
-import {result} from "lodash";
+import {EntityGroup} from "@shared/models/entity-group.models";
 import {
   DataModelAutoGeneratorService
 } from "@home/components/widget/lib/settings/data-models/data-model-auto-generator.service";
@@ -117,8 +113,8 @@ export class DataModelsComponent implements OnInit {
   nextConnectorID!: number;
   inputConnectorId: number;
   schemaTree: any[];
+  realDataSchemaTree: any[];
 
-  public nodeEditCallbacks: NavTreeEditCallbacks = {};
   public showTree = false;
 
   editCallbacks: UserCallbacks = {
@@ -172,7 +168,6 @@ export class DataModelsComponent implements OnInit {
               private cdr: ChangeDetectorRef,
               private attributeService: AttributeService,
               private customerService: CustomerService,
-              private relationService: EntityRelationService,
               private dataModelsService: DataModelsService,
               private dashboardService: DashboardService,
               private entityGroupService: EntityGroupService,
@@ -325,6 +320,8 @@ export class DataModelsComponent implements OnInit {
           this.dashboardService.getDashboards([this.generatedDashboardId]).subscribe(dashboards => {
             if(dashboards.length){
               this.dataModelAutoGeneratorService.autoGenerateHierarchyData(this.schemaTree, this.tenantId, data.count).subscribe(() => {
+                this.realDataSchemaTree = this.dataModelAutoGeneratorService.schemaTree;
+                this.showTree = true;
                 console.log('SUPER TREE', this.dataModelAutoGeneratorService.schemaTree);
               });
             } else {
@@ -548,118 +545,6 @@ export class DataModelsComponent implements OnInit {
     this.savedModel = deepClone(this.model);
   }
 
-  public loadNodes: LoadNodesCallback = (node, cb) => {
-    let entityArray = [];
-    if (this.schemaTree.length) {
-      this.schemaTree.forEach(customer => {
-        this.getChildrenRequest(customer, entityArray).then(res => {
-          console.log('entityArray', entityArray.length);
-          cb(entityArray);
-        });
-      });
-    }
-  };
-
-  async getChildrenRequest(parent, array, responseMap = {}) {
-    try {
-      if(parent.children) {
-        const childPromises = parent.children.map(async (child) => {
-          let response;
-
-          if(parent.type === ModelElementType.TENANT) {
-            const authState = getCurrentAuthState(this.store);
-            const authUser = authState.authUser;
-            const entityId = {id: authUser.tenantId, entityType: EntityType.TENANT};
-
-            const relationFilter = {
-              relType: child.data.relationType,
-              entityType: child.type
-            };
-
-            const searchQuery = this.buildSearchQuery(relationFilter, entityId);
-            response = await this.relationService.findInfoByQuery(searchQuery).toPromise();
-            child.entities = [];
-
-            for(const rel of response) {
-              let newCustomer = {
-                icon: false,
-                data: {
-                  id: rel.to,
-                },
-                children: [],
-                text: this.materialIconByEntityType(rel.to.entityType) + rel.toName,
-                id: rel.to.id,
-                parent: '#'
-              };
-              if(!array.find(el => el.id === newCustomer.id)) {
-                child.entities.push(newCustomer)
-                array.push(newCustomer);
-              }
-            }
-            responseMap[child.id] = response;
-          } else {
-            if(parent.entities?.length) {
-              const relationFilter = {
-                relType: child.data.relationType,
-                entityType: child.type
-              };
-              for (const entity of parent.entities) {
-                const searchQuery = this.buildSearchQuery(relationFilter, entity.data.id);
-                response = await this.relationService.findInfoByQuery(searchQuery).toPromise();
-                child.entities = [];
-
-                for(const rel of response) {
-                  let newCustomer = {
-                    icon: false,
-                    data: {
-                      id: rel.to,
-                    },
-                    children: [],
-                    text: this.materialIconByEntityType(rel.to.entityType) + rel.toName,
-                    id: rel.to.id,
-                    parent: searchQuery.parameters.rootId
-                  };
-                  if(!array.find(el => el.id === newCustomer.id)) {
-                    child.entities.push(newCustomer)
-                    array.push(newCustomer);
-                  }
-                }
-              }
-              this.getChildrenRequest(child, array)
-              responseMap[child.id] = response;
-            }
-          }
-
-          await this.getChildrenRequest(child, array, responseMap);
-        });
-
-        await Promise.all(childPromises);;
-      }
-    } catch(error) {
-      console.error('Error for request', error)
-    }
-  }
-
-  buildSearchQuery(rel, parentId) {
-    const newSearchQuery: EntityRelationsQuery = {
-      filters: [
-        {
-          relationType: rel.relType,
-          entityTypes: []
-        }
-      ],
-      parameters: {
-        rootId: parentId.id,
-        rootType: parentId.entityType,
-        direction: EntitySearchDirection.FROM,
-        maxLevel: 1
-      }
-    };
-
-    return newSearchQuery;
-  }
-
-
   private arrayToTree(array: HierarchyParentNavTreeNode[]) {
     const idToNodeMap: {[id: string]: HierarchyParentNavTreeNode} = {};
 
@@ -685,25 +570,6 @@ export class DataModelsComponent implements OnInit {
 
     this.addLevels(rootNode.children[0], 0)
     return rootNode.children;
-  }
-
-  materialIconByEntityType(entityType: string): string {
-    let materialIcon = 'insert_drive_file';
-    switch (entityType) {
-      case 'DEVICE':
-        materialIcon = 'devices_other';
-        break;
-      case 'ASSET':
-        materialIcon = 'domain';
-        break;
-      case 'CUSTOMER':
-        materialIcon = 'supervisor_account';
-        break;
-      case 'TENANT':
-        materialIcon = 'account_circle';
-        break;
-    }
-    return '<mat-icon class="node-icon material-icons" role="img" aria-hidden="false">' + materialIcon + '</mat-icon>';
   }
 
   private initTenantId() {
@@ -826,4 +692,9 @@ export class DataModelsComponent implements OnInit {
     this.nextConnectorID = Math.max(...[].concat(...this.model.nodes.map(n => (n.connectors.map(c => +c.id))))) + 1;
   }
 
+  public handleRealDataReceive(e) {
+    if(!e) {
+      this.showTree = false;
+    }
+  }
 }

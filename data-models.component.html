@@ -70,6 +70,6 @@
 
   <div class="fc-divider">
   <div class="fc-right-pane" *ngIf="showTree">
-    <tb-nav-tree [loadNodes]="loadNodes" [editCallbacks]="nodeEditCallbacks"></tb-nav-tree>
+      <tb-data-model-hierarchy-tree [schemaTree]="schemaTree" [realDataSchemaTree]="realDataSchemaTree" (isRealDataExist)="handleRealDataReceive($event)"></tb-data-model-hierarchy-tree>
   </div>
 </div>

@@ -18,6 +18,7 @@ import {
 import {
   DataModelCountDialogComponent
 } from "@home/components/widget/lib/settings/data-models/data-model-count-dialog/data-model-count-dialog.component";
+import { DataModelHierarchyTreeComponent } from '@home/components/widget/lib/settings/data-models/data-model-hierarchy-tree/data-model-hierarchy-tree.component';
 
 
 @NgModule({
@@ -34,7 +35,8 @@ import {
     ModelNodeDetailsComponent,
     ModelNodeDetailsAddFieldComponent,
     AddModelEdgeDialogComponent,
-    DataModelCountDialogComponent
+    DataModelCountDialogComponent,
+    DataModelHierarchyTreeComponent
   ],
   providers: [
     {
