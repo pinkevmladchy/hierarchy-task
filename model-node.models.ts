@@ -61,6 +61,7 @@ export interface ModelAdditionalField {
   type?: ModelEntityValueType;
   userRole?: string;
   isEnum?: boolean;
+  isRequired?: boolean;
   enumOptions?: ModelEntityValueType[];
 }
 

@@ -31,6 +31,9 @@
           </mat-option>
         </mat-select>
       </mat-form-field>
+      <div fxFlex class="mat-block" *ngIf="currentFieldType ===  AdditionalFields.ATTRIBUTES">
+        <mat-checkbox formControlName="isRequired" (change)="handleRequiredChecked($event)">Required</mat-checkbox>
+      </div>
       <div fxFlex class="mat-block" *ngIf="currentFieldType ===  AdditionalFields.ATTRIBUTES && (modelNodeAdditionalFieldForm.get('type').value === valueTypeEnum.INTEGER || modelNodeAdditionalFieldForm.get('type').value === valueTypeEnum.STRING)">
         <mat-checkbox formControlName="isEnum" (change)="handleEnumChecked($event)">Enum</mat-checkbox>
       </div>

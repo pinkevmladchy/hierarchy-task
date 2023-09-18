@@ -42,6 +42,7 @@ export class ModelNodeDetailsAddFieldComponent implements OnInit, OnDestroy {
 
   private subs = new Subscription();
   public isEnum = false;
+  public isRequired = false;
 
   constructor(
     protected store: Store<AppState>,
@@ -58,6 +59,7 @@ export class ModelNodeDetailsAddFieldComponent implements OnInit, OnDestroy {
     this.setFormGroups();
     this.buildForm();
     this.isEnum = this.field.isEnum;
+    this.isRequired = this.field.isRequired;
 
     this.subs.add(
       this.modelNodeAdditionalFieldForm.get('name').valueChanges.subscribe(() => {
@@ -93,6 +95,7 @@ export class ModelNodeDetailsAddFieldComponent implements OnInit, OnDestroy {
       [AdditionalFieldsTypes.ATTRIBUTES]: this.fb.group({
         type: this.field.type || [ModelEntityValueType.STRING],
         isEnum: [this.field?.isEnum || false],
+        isRequired: [this.field?.isRequired || false],
         enumOptions: [this.field?.enumOptions || []]
       })
     };
@@ -109,6 +112,12 @@ export class ModelNodeDetailsAddFieldComponent implements OnInit, OnDestroy {
 
   public handleEnumChecked(e) {
     this.isEnum = e.checked;
+    this.modelNodeAdditionalFieldForm.get('name').markAsTouched();
+  }
+
+  public handleRequiredChecked(e) {
+    this.isRequired = e.checked;
+    this.modelNodeAdditionalFieldForm.get('name').markAsTouched();
   }
 
   public removeOption(index) {
