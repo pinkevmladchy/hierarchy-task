@@ -84,6 +84,10 @@ export class DataModelAutoGeneratorService {
     }
   }
 
+  public clearCreatedEntities() {
+    this.createdEntityeIds$$.next([]);
+  }
+
   private saveTimeSeries(entityId: EntityId, data: TelemetryEl[]): Observable<any> {
     return this.http.post(`/api/plugins/telemetry/${entityId.entityType}/${entityId.id}/timeseries/timeseriesScope`, data);
   }
@@ -92,24 +96,24 @@ export class DataModelAutoGeneratorService {
     const entityObservables = this.entitiesObservables.map(el => el.obs);
 
     return forkJoin(entityObservables).pipe(
-        tap(() => {
-          this.createAdditionalItemsObservables();
-          this.createDemoRelationsObservables();
-          console.log('TREE 2', this.createdEntityeIds$$.value);
-        }),
-        switchMap(() => {
-          return this.entitiesForChangeOwners.length ? forkJoin(this.entitiesForChangeOwners) : of(null);
-        }),
-        switchMap(() => {
-          return this.relationObservables.length ? forkJoin(this.relationObservables) : of(null);
-        }),
-        switchMap(() => {
-          return  this.additionalElementsObservables.attributes.length ? forkJoin(this.additionalElementsObservables.attributes) : of(null);
-        }),
-        switchMap(() => {
-          return this.additionalElementsObservables.telemetries.length
-              ? forkJoin(this.additionalElementsObservables.telemetries) : of(null);
-        })
+      tap(() => {
+        this.createAdditionalItemsObservables();
+        this.createDemoRelationsObservables();
+        console.log('TREE 2', this.createdEntityeIds$$.value);
+      }),
+      switchMap(() => {
+        return this.entitiesForChangeOwners.length ? forkJoin(this.entitiesForChangeOwners) : of(null);
+      }),
+      switchMap(() => {
+        return this.relationObservables.length ? forkJoin(this.relationObservables) : of(null);
+      }),
+      switchMap(() => {
+        return  this.additionalElementsObservables.attributes.length ? forkJoin(this.additionalElementsObservables.attributes) : of(null);
+      }),
+      switchMap(() => {
+        return this.additionalElementsObservables.telemetries.length
+          ? forkJoin(this.additionalElementsObservables.telemetries) : of(null);
+      })
     );
   }
 
@@ -142,13 +146,13 @@ export class DataModelAutoGeneratorService {
             return {key: attribute.name, value: this.createDemoAttributeValue(attribute)};
           });
           this.additionalElementsObservables.attributes
-              .push(this.attributeService.saveEntityAttributes(entity.id, AttributeScope.SERVER_SCOPE, attributesArray));
+            .push(this.attributeService.saveEntityAttributes(entity.id, AttributeScope.SERVER_SCOPE, attributesArray));
         }
 
         if (treeEl.data.telemetries?.length) {
           treeEl.data.telemetries.forEach(telemetry => {
             this.additionalElementsObservables.telemetries
-                .push(this.saveTimeSeries(entity.id, this.createDemoTelemetry(telemetry)));
+              .push(this.saveTimeSeries(entity.id, this.createDemoTelemetry(telemetry)));
           });
         }
       });
@@ -232,10 +236,10 @@ export class DataModelAutoGeneratorService {
     };
     this.customersCounter++;
     this.entitiesObservables.push({treeEl, obs: this.customerService.saveCustomer(newCustomer).pipe(
-          tap(customer => {
-            this.setCreatedEntities(customer.id);
-            return treeEl.entities.push(customer);
-          })
+        tap(customer => {
+          this.setCreatedEntities(customer.id);
+          return treeEl.entities.push(customer);
+        })
       )});
   }
 
@@ -247,10 +251,10 @@ export class DataModelAutoGeneratorService {
     };
     this.deviceCounter++;
     this.entitiesObservables.push({treeEl, obs: this.deviceService.saveDevice(newDevice).pipe(
-          tap(device => {
-            this.setCreatedEntities(device.id);
-            return treeEl.entities.push(device);
-          })
+        tap(device => {
+          this.setCreatedEntities(device.id);
+          return treeEl.entities.push(device);
+        })
       )});
   }
 
@@ -262,10 +266,10 @@ export class DataModelAutoGeneratorService {
     };
     this.assetCounter++;
     this.entitiesObservables.push({treeEl, obs: this.assetService.saveAsset(newAsset).pipe(
-          tap(asset => {
-            this.setCreatedEntities(asset.id);
-            return treeEl.entities.push(asset);
-          })
+        tap(asset => {
+          this.setCreatedEntities(asset.id);
+          return treeEl.entities.push(asset);
+        })
       )});
   }
 

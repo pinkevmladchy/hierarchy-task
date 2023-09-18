@@ -31,20 +31,27 @@
                   matTooltipPosition="above">
             <mat-icon>dashboard</mat-icon>
           </button>
-          <button [disabled]="(isLoading$ | async) || !savedModel || modelChanged || !generatedDashboardId"
-                  mat-fab color="accent" class="tb-btn-footer"
-                  (click)="onAutomaticFilling()"
-                  matTooltip="Automatic filling"
-                  matTooltipPosition="above">
-            <mat-icon>G</mat-icon>
-          </button>
-          <button [disabled]="(isLoading$ | async)"
-                  mat-fab color="accent" class="tb-btn-footer"
-                  (click)="onAutomaticFilling()"
-                  matTooltip="Delete automatic filled data"
-                  matTooltipPosition="above">
-            <mat-icon>D</mat-icon>
-          </button>
+          <ng-container *ngIf="isShowAutoFillBtn">
+            {{generatedEntities.length > 0}} {{showTree}}
+            <ng-container *ngIf="generatedEntities.length === 0 && !showTree; else autoFillBtn">
+              <button [disabled]="(isLoading$ | async) || !savedModel || modelChanged || !generatedDashboardId"
+                      mat-fab color="accent" class="tb-btn-footer"
+                      (click)="onAutomaticFilling()"
+                      matTooltip="Automatic filling"
+                      matTooltipPosition="above">
+                <mat-icon>G</mat-icon>
+              </button>
+            </ng-container>
+            <ng-template #autoFillBtn>
+              <button [disabled]="(isLoading$ | async)"
+                      mat-fab color="accent" class="tb-btn-footer"
+                      (click)="onDeleteAutomaticFillingData()"
+                      matTooltip="Delete automatic filled data"
+                      matTooltipPosition="above">
+                <mat-icon>D</mat-icon>
+              </button>
+            </ng-template>
+          </ng-container>
             <button [disabled]="(isLoading$ | async) || model.nodes.length <= 1"
                     mat-fab color="accent" class="tb-btn-footer"
                     (click)="onDeleteModel()"

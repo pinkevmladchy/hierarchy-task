@@ -14,6 +14,7 @@ export interface FcModelNodeType extends FcNode {
 export interface SavedInAttributeModel {
   generatedDashboardId: null | string;
   model: string;
+  generatedEntities: string;
 }
 
 export interface AddModelNodeDialogData {

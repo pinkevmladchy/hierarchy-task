@@ -322,6 +322,8 @@ export class DataModelsComponent implements OnInit {
   }
 
   public onAutomaticFilling() {
+    this.dataModelAutoGeneratorService.clearCreatedEntities();
+
     this.dialog.open(DataModelCountDialogComponent).afterClosed().subscribe(
         (data: AutoGeneratingSettings) => {
           if (data) {
@@ -331,7 +333,6 @@ export class DataModelsComponent implements OnInit {
                   this.realDataSchemaTree = this.dataModelAutoGeneratorService.schemaTree;
                   this.generatedEntities = this.dataModelAutoGeneratorService.getCreatedEntities();
                   this.showTree = true;
-                  console.log(333333333333)
                   this.updateSavedModel();
                 });
               } else {
