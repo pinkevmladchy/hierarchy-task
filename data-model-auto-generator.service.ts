@@ -18,6 +18,7 @@ import {EntityId} from "@shared/models/id/entity-id";
 import {AttributeData, AttributeScope, LatestTelemetry} from "@shared/models/telemetry/telemetry.models";
 import {EntityRelationService} from "@core/http/entity-relation.service";
 import {EntityRelation, RelationTypeGroup} from "@shared/models/relation.models";
+import {deepClone} from "@core/utils";
 
 @Injectable({
   providedIn: 'root'
@@ -27,11 +28,10 @@ export class DataModelAutoGeneratorService {
   schemaTree: any[];
   createEntitiesNumber = 1;
 
-  customersCounter = 1;
-  assetCounter = 1;
-  deviceCounter = 1;
-  attributeCounter = 1;
-  relationsCounter = 1;
+    customersCounter = 1;
+    assetCounter = 1;
+    deviceCounter = 1;
+    attributeCounter = 1;
 
   entitiesObservables: EntitiesObservable[] = [];
   additionalElementsObservables: {attributes?: Observable<any>[];
@@ -48,45 +48,41 @@ export class DataModelAutoGeneratorService {
   public autoGenerateHierarchyData(schemaTree: any[], tenantId: TenantId, numberEntities: number) {
     this.resetProperties();
 
-    console.log('TREE', schemaTree);
     this.createEntitiesNumber = numberEntities;
     this.tenantId = tenantId;
-    this.schemaTree = schemaTree;
+    this.schemaTree = deepClone(schemaTree);
+    this.schemaTree[0].entities = [{id: tenantId}]; //tenant node doesn't have this field by default
     this.recursiveMoveToTree(this.createEntitiesObservables.bind(this), [ModelElementType.TENANT]);
     this.executeRequestsList();
+    console.log('TREE 1', this.schemaTree);
   }
 
   private executeRequestsList() {
     const entityObservables = this.entitiesObservables.map(el => el.obs);
 
-    const observables = [
-      entityObservables,
-      this.additionalElementsObservables.attributes,
-      this.additionalElementsObservables.telemetries,
-      this.relationObservables
-    ];
-
-    forkJoin(entityObservables).pipe(
+      forkJoin(entityObservables).pipe(
         tap(() => {
           this.createAdditionalItemsObservables();
-          this.createDemoRelations();
-        }),
-        switchMap(() => {
-          return  this.additionalElementsObservables.attributes.length ? forkJoin(this.additionalElementsObservables.attributes) : of(null);
-        }),
-        switchMap(() => {
-          return this.additionalElementsObservables.telemetries.length
-              ? forkJoin(this.additionalElementsObservables.telemetries) : of(null);
+          this.createDemoRelationsObservables();
+          console.log('TREE 2', this.schemaTree);
         }),
         switchMap(() => {
           return this.relationObservables.length ? forkJoin(this.relationObservables) : of(null);
+        }),
+        switchMap(() => {
+         return  this.additionalElementsObservables.attributes.length ? forkJoin(this.additionalElementsObservables.attributes) : of(null);
+        }),
+        switchMap(() => {
+          return this.additionalElementsObservables.telemetries.length
+            ? forkJoin(this.additionalElementsObservables.telemetries) : of(null);
         })
-    ).subscribe(data => {
-      console.log('FINISHED');
-    });
-  }
+      ).subscribe(data => {
+        console.log('FINISHED');
+      });
+    }
 
   private createEntitiesObservables(treeEl: any, parent: any) {
+    treeEl.entities = [];
     if (treeEl.type === ModelElementType.CUSTOMER) {
       for (let i = 1; i <= this.calculateCountOfElementForCreate(treeEl.level); i++) {
         this.addCustomerEntityObs(treeEl);
@@ -108,27 +104,19 @@ export class DataModelAutoGeneratorService {
       if (!treeEl.entities) {
         return;
       }
-      treeEl.entities.forEach(el=> {
+      treeEl.entities.forEach(entity => {
         if (treeEl.data.attributes?.length) {
-          treeEl.entities.forEach(entity => {
-            const attributesArray: Array<AttributeData> = treeEl.data.attributes.map(attribute => {
-              return {key: attribute.name, value: this.createDemoAttributeValue(attribute)};
-            });
-            this.additionalElementsObservables.attributes
-                .push(this.attributeService.saveEntityAttributes(entity.id, AttributeScope.SERVER_SCOPE, attributesArray));
+          const attributesArray: Array<AttributeData> = treeEl.data.attributes.map(attribute => {
+            return {key: attribute.name, value: this.createDemoAttributeValue(attribute)};
           });
-          console.log('ATTRIBUTES', this.additionalElementsObservables.attributes)
+          this.additionalElementsObservables.attributes
+            .push(this.attributeService.saveEntityAttributes(entity.id, AttributeScope.SERVER_SCOPE, attributesArray));
         }
 
         if (treeEl.data.telemetries?.length) {
           treeEl.data.telemetries.forEach(telemetry => {
-            treeEl.entities.forEach(entity => {
-              const telemetriesArray: Array<AttributeData> = treeEl.data.telemetries.map(telemetry => {
-                return {key: telemetry.name, value: this.createDemoTelemetry(treeEl.data.telemetries)};
-              });
-              this.additionalElementsObservables.telemetries
-                  .push(this.attributeService.saveEntityTimeseries(entity.id, LatestTelemetry.LATEST_TELEMETRY, telemetriesArray));
-            });
+            this.additionalElementsObservables.telemetries
+              .push(this.attributeService.saveEntityTimeseries(entity.id, 'timeseriesScope', this.createDemoTelemetry(telemetry)));
           });
         }
       });
@@ -162,27 +150,28 @@ export class DataModelAutoGeneratorService {
           value = {'json': 'yes'};
       }
     }
-    return value;
+      return value;
   }
 
-  private createDemoTelemetry(keyName: string): any {
-    const formBody = (ts: number, keyName: string, type: string, weight: number) => {
-      return {
-        ts,
-        values: {
-          [keyName]: JSON.stringify({
-            type,
-            weight
-          })
-        }
+  private createDemoTelemetry(telemetry: any): AttributeData[] {
+    const currentTime = Date.now();
+    const oneHour = 60 * 60 * 1000;
+    const oneWeek = 7 * 24 * oneHour;
+    const result = [];
+
+    for (let ts = currentTime - oneWeek; ts <= currentTime; ts += oneHour) {
+      const demoTelemetry: AttributeData = {
+        lastUpdateTs: ts,
+        key: telemetry.name,
+        value: this.randomIntFromInterval(1, 100)
       };
-    };
-
-    return [{key: keyName, value: 12}, {key: keyName, value: 21},
-      {key: keyName, value: 14}, {key: keyName, value: 53}, {key: keyName, value: 2}];
+      result.push(demoTelemetry);
+    }
+    console.log('telemetry', result);
+    return result;
   }
 
-  private createDemoRelation(relationName: string, from: EntityId, to: EntityId): EntityRelation {
+  private createDemoRelationEl(relationName: string, from: EntityId, to: EntityId): EntityRelation {
     return  {
       type: `${relationName}`,
       typeGroup: RelationTypeGroup.COMMON,
@@ -210,63 +199,57 @@ export class DataModelAutoGeneratorService {
     };
     this.customersCounter++;
     this.entitiesObservables.push({treeEl, obs: this.customerService.saveCustomer(newCustomer).pipe(
-          tap(customer => {
-            return !!treeEl.entities ? treeEl.entities.push(customer) : treeEl.entities = [customer];
-          })
+        tap(customer => {
+          return treeEl.entities.push(customer);
+        })
       )});
   }
 
   private addDeviceEntityObs(treeEl: any) {
     const newDevice: Device = {
-      name: `${treeEl.name} ${this.deviceCounter}`,
+      name: `${treeEl.name} (${this.deviceCounter})`,
       type: 'default',
-      label: `Device label ${this.deviceCounter}`
+      label: `${treeEl.name} (${this.deviceCounter})`
     };
     this.deviceCounter++;
     this.entitiesObservables.push({treeEl, obs: this.deviceService.saveDevice(newDevice).pipe(
-          tap(device => {
-            return !!treeEl.entities ? treeEl.entities.push(device) : treeEl.entities = [device];
-          })
+        tap(device => {
+          return treeEl.entities.push(device);
+        })
       )});
   }
 
   private addAssetEntityObs(treeEl: any) {
     const newAsset: Asset = {
-      name: `Asset name ${this.assetCounter}`,
+      name: `${treeEl.name} (${this.assetCounter})`,
       type: 'default',
-      label: `Asset label ${this.assetCounter}`
+      label: `${treeEl.name} (${this.assetCounter})`
     };
     this.assetCounter++;
     this.entitiesObservables.push({treeEl, obs: this.assetService.saveAsset(newAsset).pipe(
-          tap(asset => {
-            return !!treeEl.entities ? treeEl.entities.push(asset) : treeEl.entities = [asset];
-          })
+        tap(asset => {
+          return treeEl.entities.push(asset);
+        })
       )});
   }
 
-  private createDemoRelations() {
-    let unifierNameCounter = 1;
+  private createDemoRelationsObservables() {
     const callBack = (treeEl, parent) => {
       if (!treeEl.entities) {
         return;
       }
-      const parentEntitiesCount = parent.entities?.length || 1; // tenant don't has entities
-      const entitiesCount = treeEl.entities?.length;
-      const ratio = entitiesCount / parentEntitiesCount;
-      treeEl.entities.forEach((el, idx)=> {
-            let from!: EntityId;
+      const parentEntities = [...parent.entities];
+      const currentEntities = [...treeEl.entities];
+      const parentEntitiesCount = parentEntities?.length;
+      const entitiesCount = currentEntities?.length;
+      const ratio = Math.floor(entitiesCount / parentEntitiesCount);
 
-            if (parent.type === ModelElementType.TENANT) {
-              from = this.tenantId;
-            } else {
-              from = idx === 0 ?  parent.entities[0]?.id : parent.entities[Math.ceil(idx / ratio)]?.id;
-            }
-            const to = el.id;
-            const newRelation = this.createDemoRelation(treeEl.data.relationType, from, to);
-            this.relationObservables.push(this.entityRelationService.saveRelation(newRelation));
-            unifierNameCounter++;
-          }
-      );
+      parentEntities.forEach((parentEntity, idx) => {
+        for (let i = 0; i < ratio; i++) {
+          const newRelation = this.createDemoRelationEl(treeEl.data.relationType, parentEntity.id, currentEntities.shift().id);
+          this.relationObservables.push(this.entityRelationService.saveRelation(newRelation));
+        }
+      });
     };
     this.recursiveMoveToTree(callBack, [ModelElementType.TENANT]);
   }
@@ -288,7 +271,6 @@ export class DataModelAutoGeneratorService {
   }
 
   private calculateCountOfElementForCreate(treeLevel: number): number {
-    console.log(treeLevel, Math.pow(this.createEntitiesNumber, (treeLevel - 1)));
     return  Math.pow(this.createEntitiesNumber, (treeLevel - 1));
   }
   private randomIntFromInterval(min: number, max: number) {
@@ -307,8 +289,8 @@ export class DataModelAutoGeneratorService {
     this.assetCounter = 1;
     this.deviceCounter = 1;
     this.attributeCounter = 1;
-    this.relationsCounter = 1;
   }
 }
 
 interface EntitiesObservable {treeEl: any; obs: Observable<any>}
+
