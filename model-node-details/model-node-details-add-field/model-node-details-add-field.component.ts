@@ -112,7 +112,7 @@ export class ModelNodeDetailsAddFieldComponent implements OnInit, OnDestroy {
   }
 
   public removeOption(index) {
-    const enumOptions = this.modelNodeAdditionalFieldForm.get('enumOptions') as FormArray;
-    enumOptions.removeAt(index);
+    const enumOptions = this.modelNodeAdditionalFieldForm.get('enumOptions');
+    enumOptions.value.splice(index, 1);
   }
 }
