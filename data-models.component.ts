@@ -30,7 +30,7 @@ import {
   AdditionalFieldsTypes, AddModelEdgeDialogData, AddModelNodeDialogData,
   FCDataModel,
   FcModelNode, ModelAdditionalFieldsObj,
-  ModelElementType, SavedInAttributeModel
+  ModelElementType, ModelEntityValueType, SavedInAttributeModel
 } from '@home/components/widget/lib/settings/data-models/model-node.models';
 import {delay, share} from 'rxjs/operators';
 import {selectIsLoading} from '@core/interceptors/load.selectors';
@@ -551,6 +551,7 @@ export class DataModelsComponent implements OnInit {
     if (this.schemaTree.length) {
       this.schemaTree.forEach(customer => {
         this.getChildrenRequest(customer, entityArray).then(res => {
+          console.log('entityArray', entityArray.length);
           cb(entityArray);
         });
       });
@@ -656,6 +657,7 @@ export class DataModelsComponent implements OnInit {
     return newSearchQuery;
   }
 
+
   private arrayToTree(array: HierarchyParentNavTreeNode[]) {
     const idToNodeMap: {[id: string]: HierarchyParentNavTreeNode} = {};
 
@@ -726,6 +728,7 @@ export class DataModelsComponent implements OnInit {
     return maxLevel;
   }
 
+
   private getSavedModelFromTenantAttribute() {
     this.attributeService.getEntityAttributes(this.tenantId,
       AttributeScope.SERVER_SCOPE, ['hierarchy-model']).subscribe(data => {
@@ -739,6 +742,7 @@ export class DataModelsComponent implements OnInit {
         this.model.edges = savedModel.edges;
         this.setSavedModel();
         this.schemaTree = this.generateHierarchyTree();
+        console.log('TREE', this.schemaTree);
         if(this.schemaTree.length) {
           this.showTree = true;
         }
@@ -750,13 +754,17 @@ export class DataModelsComponent implements OnInit {
   }
 
   private setGeneratedDashboardId(id: string | null) {
+    if (!id) {
+      return this.generatedDashboardId = null;
+    }
+
     this.dashboardService.getDashboards([id]).subscribe(dashboards => {
-       if (dashboards.length) {
-         this.generatedDashboardId = id;
-       } else {
-         this.generatedDashboardId = null;
-       }
-     });
+      if (dashboards.length) {
+        this.generatedDashboardId = id;
+      } else {
+        this.generatedDashboardId = null;
+      }
+    });
   }
 
   private generateManagementDashboard(previousDashboardId: string | null) {
@@ -783,7 +791,7 @@ export class DataModelsComponent implements OnInit {
       type: 'DASHBOARD',
       name: 'Management Dashboard',
       ownerId: this.tenantId,
-    };
+    }
 
     this.entityGroupService.getEntityGroupsByOwnerId('TENANT' as EntityType, this.tenantId.id, 'DASHBOARD' as EntityType).subscribe(res=>{
       if(res.find(x=>x.name == 'Management Dashboard')){
@@ -800,15 +808,15 @@ export class DataModelsComponent implements OnInit {
             this.generatedDashboardId = newManagementDashboard.id.id;
             this.changeDashboardIdForSavedModel();
           });
-        });
+        })
       }
-    });
+    })
   }
 
   private changeDashboardIdForSavedModel() {
     this.attributeService.saveEntityAttributes(this.tenantId, AttributeScope.SERVER_SCOPE,
-      [{key: 'hierarchy-model', value: {generatedDashboardId: this.generatedDashboardId, model: JSON.stringify(this.savedModel)}}])
-      .subscribe();
+        [{key: 'hierarchy-model', value: {generatedDashboardId: this.generatedDashboardId, model: JSON.stringify(this.savedModel)}}])
+        .subscribe();
   }
 
   private findNextSavedModelElementsId() {
