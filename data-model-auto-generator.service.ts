@@ -8,7 +8,7 @@ import {
 import {CustomerService} from '@core/http/customer.service';
 import {Customer} from '@shared/models/customer.model';
 import {TenantId} from '@shared/models/id/tenant-id';
-import {bufferCount, concatMap, forkJoin, from, mergeMap, Observable, of, switchMap} from 'rxjs';
+import {BehaviorSubject, bufferCount, concatMap, forkJoin, from, mergeMap, Observable, of, switchMap} from 'rxjs';
 import {AssetService} from '@core/http/asset.service';
 import {Asset} from '@shared/models/asset.models';
 import {DeviceService} from '@core/http/device.service';
@@ -26,6 +26,7 @@ import {EntityRelationService} from "@core/http/entity-relation.service";
 import {EntityRelation, RelationTypeGroup} from "@shared/models/relation.models";
 import {deepClone} from "@core/utils";
 import {HttpClient} from "@angular/common/http";
+import {EntityGroupService} from "@core/http/entity-group.service";
 
 @Injectable({
   providedIn: 'root'
@@ -33,25 +34,29 @@ import {HttpClient} from "@angular/common/http";
 export class DataModelAutoGeneratorService {
   tenantId!: TenantId;
   public schemaTree: any[];
-  public createdEntities: EntityId[] = [];
+  public createdEntityeIds$$ = new BehaviorSubject<EntityId[]>([]) ;
   createEntitiesNumber = 1;
   namePrefix = '';
 
-    customersCounter = 1;
-    assetCounter = 1;
-    deviceCounter = 1;
-    attributeCounter = 1;
+  customersCounter = 1;
+  assetCounter = 1;
+  deviceCounter = 1;
+  attributeCounter = 1;
+
+  latestCustomerId: EntityId = null;
 
   entitiesObservables: EntitiesObservable[] = [];
   additionalElementsObservables: {attributes?: Observable<any>[];
     telemetries: Observable<any>[];
   } = {attributes: [], telemetries: []};
   relationObservables: Observable<any>[] = [];
+  entitiesForChangeOwners: Observable<any>[] = [];
 
   constructor(private customerService: CustomerService,
               private http: HttpClient,
               private assetService: AssetService,
               private deviceService: DeviceService,
+              private entityGroupService: EntityGroupService,
               private attributeService: AttributeService,
               private entityRelationService: EntityRelationService) { }
 
@@ -67,6 +72,18 @@ export class DataModelAutoGeneratorService {
     return this.executeRequestsList();
   }
 
+  public getCreatedEntities() {
+    return this.createdEntityeIds$$.value;
+  }
+
+  public setCreatedEntities(data: EntityId | EntityId[]) {
+    if (Array.isArray((data))) {
+      this.createdEntityeIds$$.value.push(...data);
+    } else {
+      this.createdEntityeIds$$.value.push(data);
+    }
+  }
+
   private saveTimeSeries(entityId: EntityId, data: TelemetryEl[]): Observable<any> {
     return this.http.post(`/api/plugins/telemetry/${entityId.entityType}/${entityId.id}/timeseries/timeseriesScope`, data);
   }
@@ -74,24 +91,27 @@ export class DataModelAutoGeneratorService {
   private executeRequestsList(): Observable<any> {
     const entityObservables = this.entitiesObservables.map(el => el.obs);
 
-      return forkJoin(entityObservables).pipe(
+    return forkJoin(entityObservables).pipe(
         tap(() => {
           this.createAdditionalItemsObservables();
           this.createDemoRelationsObservables();
-          console.log('TREE 2', this.createdEntities);
+          console.log('TREE 2', this.createdEntityeIds$$.value);
+        }),
+        switchMap(() => {
+          return this.entitiesForChangeOwners.length ? forkJoin(this.entitiesForChangeOwners) : of(null);
         }),
         switchMap(() => {
           return this.relationObservables.length ? forkJoin(this.relationObservables) : of(null);
         }),
         switchMap(() => {
-         return  this.additionalElementsObservables.attributes.length ? forkJoin(this.additionalElementsObservables.attributes) : of(null);
+          return  this.additionalElementsObservables.attributes.length ? forkJoin(this.additionalElementsObservables.attributes) : of(null);
         }),
         switchMap(() => {
           return this.additionalElementsObservables.telemetries.length
-            ? forkJoin(this.additionalElementsObservables.telemetries) : of(null);
+              ? forkJoin(this.additionalElementsObservables.telemetries) : of(null);
         })
-      );
-    }
+    );
+  }
 
   private createEntitiesObservables(treeEl: any, parent: any) {
     treeEl.entities = [];
@@ -122,13 +142,13 @@ export class DataModelAutoGeneratorService {
             return {key: attribute.name, value: this.createDemoAttributeValue(attribute)};
           });
           this.additionalElementsObservables.attributes
-            .push(this.attributeService.saveEntityAttributes(entity.id, AttributeScope.SERVER_SCOPE, attributesArray));
+              .push(this.attributeService.saveEntityAttributes(entity.id, AttributeScope.SERVER_SCOPE, attributesArray));
         }
 
         if (treeEl.data.telemetries?.length) {
           treeEl.data.telemetries.forEach(telemetry => {
             this.additionalElementsObservables.telemetries
-              .push(this.saveTimeSeries(entity.id, this.createDemoTelemetry(telemetry)));
+                .push(this.saveTimeSeries(entity.id, this.createDemoTelemetry(telemetry)));
           });
         }
       });
@@ -162,7 +182,7 @@ export class DataModelAutoGeneratorService {
           value = {'json': 'yes'};
       }
     }
-      return value;
+    return value;
   }
 
   private createDemoTelemetry(telemetry: any): TelemetryEl[] {
@@ -212,10 +232,10 @@ export class DataModelAutoGeneratorService {
     };
     this.customersCounter++;
     this.entitiesObservables.push({treeEl, obs: this.customerService.saveCustomer(newCustomer).pipe(
-        tap(customer => {
-          this.createdEntities.push(customer.id);
-          return treeEl.entities.push(customer);
-        })
+          tap(customer => {
+            this.setCreatedEntities(customer.id);
+            return treeEl.entities.push(customer);
+          })
       )});
   }
 
@@ -227,10 +247,10 @@ export class DataModelAutoGeneratorService {
     };
     this.deviceCounter++;
     this.entitiesObservables.push({treeEl, obs: this.deviceService.saveDevice(newDevice).pipe(
-        tap(device => {
-          this.createdEntities.push(device.id);
-          return treeEl.entities.push(device);
-        })
+          tap(device => {
+            this.setCreatedEntities(device.id);
+            return treeEl.entities.push(device);
+          })
       )});
   }
 
@@ -242,10 +262,10 @@ export class DataModelAutoGeneratorService {
     };
     this.assetCounter++;
     this.entitiesObservables.push({treeEl, obs: this.assetService.saveAsset(newAsset).pipe(
-        tap(asset => {
-          this.createdEntities.push(asset.id);
-          return treeEl.entities.push(asset);
-        })
+          tap(asset => {
+            this.setCreatedEntities(asset.id);
+            return treeEl.entities.push(asset);
+          })
       )});
   }
 
@@ -263,12 +283,23 @@ export class DataModelAutoGeneratorService {
       parentEntities.forEach((parentEntity, idx) => {
         for (let i = 0; i < ratio; i++) {
           currentEntities[0].parent = parentEntity.id.id;
+          this.createEntitiesForChangeOwnersObs(currentEntities[0]);
           const newRelation = this.createDemoRelationEl(treeEl.data.relationType, parentEntity.id, currentEntities.shift().id);
           this.relationObservables.push(this.entityRelationService.saveRelation(newRelation));
         }
       });
     };
     this.recursiveMoveToTree(callBack, [ModelElementType.TENANT]);
+  }
+
+  private createEntitiesForChangeOwnersObs(currentEntity: any) {
+    if (currentEntity.id.entityType === 'CUSTOMER') {
+      this.latestCustomerId = currentEntity.id;
+    }
+
+    if(currentEntity.id.entityType === 'ASSET' || currentEntity.id.entityType === 'DEVICE'){
+      this.entitiesForChangeOwners.push(this.entityGroupService.changeEntityOwner(this.latestCustomerId, currentEntity.id))
+    }
   }
 
   private recursiveMoveToTree(callback: (el: any, parent: any) => void, callBackTypeRestrictions: ModelElementType[] = []) {
@@ -302,6 +333,7 @@ export class DataModelAutoGeneratorService {
     this.entitiesObservables = [];
     this.additionalElementsObservables = {attributes: [], telemetries: []};
     this.relationObservables = [];
+    this.entitiesForChangeOwners = [];
     this.customersCounter = 1;
     this.assetCounter = 1;
     this.deviceCounter = 1;
@@ -317,4 +349,3 @@ interface TelemetryEl {
     [key: string]: number;
   };
 }
-

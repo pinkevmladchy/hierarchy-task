@@ -8,29 +8,26 @@ import {
   ViewChild
 } from '@angular/core';
 import {FlowchartConstants, NgxFlowchartComponent, UserCallbacks} from 'ngx-flowchart';
-import {Observable, of} from 'rxjs';
+import {Observable, of, Subscription} from 'rxjs';
 import {DELETE} from '@angular/cdk/keycodes';
 import {select, Store} from '@ngrx/store';
 import {AppState} from '@core/core.state';
 import {MatDialog, MatDialogConfig} from '@angular/material/dialog';
 import {deepClone} from '@core/utils';
 import {WidgetContext} from '@home/models/widget-component.models';
-import {LoadNodesCallback, NavTreeEditCallbacks, NavTreeNode} from '@shared/components/nav-tree.component';
+import {NavTreeNode} from '@shared/components/nav-tree.component';
 import {Customer} from '@shared/models/customer.model';
 import {CustomerService} from '@core/http/customer.service';
-import {EntityRelationService} from '@core/http/entity-relation.service';
 import {PageLink} from '@shared/models/page/page-link';
-import {EntityRelationsQuery, EntitySearchDirection} from '@shared/models/relation.models';
 import {AttributeService} from '@core/http/attribute.service';
 import {getCurrentAuthState} from '@core/auth/auth.selectors';
 import {AttributeScope} from '@shared/models/telemetry/telemetry.models';
 import {EntityType} from '@shared/models/entity-type.models';
-import {EntityId} from '@shared/models/id/entity-id';
 import {
   AdditionalFieldsTypes, AddModelEdgeDialogData, AddModelNodeDialogData, AutoGeneratingSettings,
   FCDataModel,
   FcModelNode, ModelAdditionalFieldsObj,
-  ModelElementType, ModelEntityValueType, SavedInAttributeModel
+  ModelElementType, SavedInAttributeModel
 } from '@home/components/widget/lib/settings/data-models/model-node.models';
 import {delay, share} from 'rxjs/operators';
 import {selectIsLoading} from '@core/interceptors/load.selectors';
@@ -48,8 +45,7 @@ import {ConfirmDialogComponent} from "@shared/components/dialog/confirm-dialog.c
 import {DashboardService} from "@core/http/dashboard.service";
 import {AlertDialogComponent} from "@shared/components/dialog/alert-dialog.component";
 import { EntityGroupService } from '@app/core/public-api';
-import {EntityGroup, EntityGroupConfiguration} from "@shared/models/entity-group.models";
-import {result} from "lodash";
+import {EntityGroup} from "@shared/models/entity-group.models";
 import {
   DataModelAutoGeneratorService
 } from "@home/components/widget/lib/settings/data-models/data-model-auto-generator.service";
@@ -57,6 +53,7 @@ import {TenantId} from "@shared/models/id/tenant-id";
 import {
   DataModelCountDialogComponent
 } from "@home/components/widget/lib/settings/data-models/data-model-count-dialog/data-model-count-dialog.component";
+import {EntityId} from "@shared/models/id/entity-id";
 
 
 export type ModelTreeNode = Omit<NavTreeNode, 'children'> & {
@@ -99,6 +96,7 @@ export class DataModelsComponent implements OnInit {
   isLoading$: Observable<boolean>;
   public modelChanged = false;
   public savedModel?: FCDataModel;
+  public generatedEntities!: EntityId[];
 
   flowchartConstants = FlowchartConstants;
 
@@ -117,9 +115,10 @@ export class DataModelsComponent implements OnInit {
   nextConnectorID!: number;
   inputConnectorId: number;
   schemaTree: any[];
+  realDataSchemaTree: any[];
 
-  public nodeEditCallbacks: NavTreeEditCallbacks = {};
-  public showTree = false;
+  public showTree!: boolean;
+  public isShowAutoFillBtn!: boolean;
 
   editCallbacks: UserCallbacks = {
     edgeDoubleClick: (event, edge) => {
@@ -168,16 +167,17 @@ export class DataModelsComponent implements OnInit {
   private tenantId!: TenantId;
   private generatedDashboardGroupdId!: string | null;
 
+  private subs = new Subscription();
+
   constructor(public dialog: MatDialog,
               private cdr: ChangeDetectorRef,
               private attributeService: AttributeService,
               private customerService: CustomerService,
-              private relationService: EntityRelationService,
               private dataModelsService: DataModelsService,
               private dashboardService: DashboardService,
               private entityGroupService: EntityGroupService,
               private importExportService: ImportExportService,
-              private dataModelAutoGeneratorService: DataModelAutoGeneratorService,
+              public dataModelAutoGeneratorService: DataModelAutoGeneratorService,
               private store: Store<AppState>) {
     this.isLoading$ = this.store.pipe(delay(0), select(selectIsLoading), share());
     this.initData();
@@ -254,7 +254,7 @@ export class DataModelsComponent implements OnInit {
     }
 
     const additionalFields: ModelAdditionalFieldsObj = Object.keys(AdditionalFieldsTypes)
-      .map(name => ({ [name]: [] })) as ModelAdditionalFieldsObj;
+        .map(name => ({ [name]: [] })) as ModelAdditionalFieldsObj;
 
     const newNode: FcModelNode = {
       name: nodeName,
@@ -280,16 +280,11 @@ export class DataModelsComponent implements OnInit {
   }
 
   public onSaveModel() {
-    this.attributeService.saveEntityAttributes(this.tenantId, AttributeScope.SERVER_SCOPE,
-      [{key: 'hierarchy-model', value: {
-          generatedDashboardId: this.generatedDashboardId,
-          model: JSON.stringify(this.model)
-        },
-    }])
-      .subscribe(() => {
-        this.setSavedModel();
-        this.modelChanged = false;
-      });
+    const callBackAfterUpdate = () => {
+      this.setSavedModel();
+      this.modelChanged = false;
+    };
+    this.updateSavedModel(callBackAfterUpdate);
   }
 
   public onGenerateDashboard() {
@@ -322,30 +317,38 @@ export class DataModelsComponent implements OnInit {
     };
   };
 
+  public onDeleteAutomaticFillingData() {
+    console.log('ENTITIES', this.generatedEntities);
+  }
+
   public onAutomaticFilling() {
     this.dialog.open(DataModelCountDialogComponent).afterClosed().subscribe(
-      (data: AutoGeneratingSettings) => {
-        if (data) {
-          this.dashboardService.getDashboards([this.generatedDashboardId]).subscribe(dashboards => {
-            if(dashboards.length){
-              this.dataModelAutoGeneratorService.autoGenerateHierarchyData(this.schemaTree, this.tenantId, data).subscribe(() => {
-                console.log('SUPER TREE', this.dataModelAutoGeneratorService.schemaTree);
-              });
-            } else {
-              this.generatedDashboardId = null;
-              this.dialog.open(AlertDialogComponent, {
-                disableClose: true,
-                panelClass: [],
-                data: {
-                  title: 'Dashboard is missing',
-                  message: 'First you need to generate a dashboard',
-                  ok: 'OK'
-                }
-              });
-            }
-          });
+        (data: AutoGeneratingSettings) => {
+          if (data) {
+            this.dashboardService.getDashboards([this.generatedDashboardId]).subscribe(dashboards => {
+              if(dashboards.length){
+                this.dataModelAutoGeneratorService.autoGenerateHierarchyData(this.schemaTree, this.tenantId, data).subscribe(() => {
+                  this.realDataSchemaTree = this.dataModelAutoGeneratorService.schemaTree;
+                  this.generatedEntities = this.dataModelAutoGeneratorService.getCreatedEntities();
+                  this.showTree = true;
+                  console.log(333333333333)
+                  this.updateSavedModel();
+                });
+              } else {
+                this.generatedDashboardId = null;
+                this.dialog.open(AlertDialogComponent, {
+                  disableClose: true,
+                  panelClass: [],
+                  data: {
+                    title: 'Dashboard is missing',
+                    message: 'First you need to generate a dashboard',
+                    ok: 'OK'
+                  }
+                });
+              }
+            });
+          }
         }
-      }
     );
   }
 
@@ -387,22 +390,22 @@ export class DataModelsComponent implements OnInit {
     this.inputConnectorId = this.nextConnectorID++;
 
     this.model.nodes.push(
-      {
-        id: (this.nextNodeID++).toString(), // todo maybe change to number
-        name: 'Tenant',
-        type: ModelElementType.TENANT,
-        readonly: true,
-        added: true,
-        additionalFields: {},
-        x: 50,
-        y: 100,
-        connectors: [
-          {
-            type: FlowchartConstants.rightConnectorType,
-            id: this.inputConnectorId + ''
-          },
-        ]
-      }
+        {
+          id: (this.nextNodeID++).toString(), // todo maybe change to number
+          name: 'Tenant',
+          type: ModelElementType.TENANT,
+          readonly: true,
+          added: true,
+          additionalFields: {},
+          x: 50,
+          y: 100,
+          connectors: [
+            {
+              type: FlowchartConstants.rightConnectorType,
+              id: this.inputConnectorId + ''
+            },
+          ]
+        }
     );
   }
 
@@ -427,14 +430,14 @@ export class DataModelsComponent implements OnInit {
       }
     }).afterClosed().subscribe((newModelEdge: FcEdge) => {
       if (newModelEdge) {
-          if (mode === 'add') {
-            modelEdge.label = newModelEdge.label;
-          } else if (mode === 'edit') {
-            modelEdge.label = newModelEdge.label;
-          }
-          this.modelChanged = true;
-          this.dateModelChainCanvas.modelService.detectChanges();
-          this.cdr.markForCheck();
+        if (mode === 'add') {
+          modelEdge.label = newModelEdge.label;
+        } else if (mode === 'edit') {
+          modelEdge.label = newModelEdge.label;
+        }
+        this.modelChanged = true;
+        this.dateModelChainCanvas.modelService.detectChanges();
+        this.cdr.markForCheck();
       }
     });
   }
@@ -446,7 +449,7 @@ export class DataModelsComponent implements OnInit {
     const endNode = this.model.nodes.find(n => n.connectors.some(c => c.id === modelEdge.destination));
 
     if ((startNode.type === ModelElementType.ASSET || startNode.type === ModelElementType.DEVICE)
-      && endNode.type === ModelElementType.CUSTOMER) {
+        && endNode.type === ModelElementType.CUSTOMER) {
       this.dialog.open(AlertDialogComponent, {
         disableClose: true,
         panelClass: [],
@@ -474,18 +477,18 @@ export class DataModelsComponent implements OnInit {
         modelNodesSavedNamesList: otherNodeNamesList
       }
     }).afterClosed().subscribe(
-      (newModelNode: FcModelNode) => {
-        if (newModelNode) {
-         if (mode === 'add') {
-           this.addModelNode(newModelNode);
-         } else if (mode === 'edit') {
-           this.editModelNode(newModelNode);
-         }
-          this.modelChanged = true;
-          this.dateModelChainCanvas.modelService.detectChanges();
-          this.cdr.markForCheck();
+        (newModelNode: FcModelNode) => {
+          if (newModelNode) {
+            if (mode === 'add') {
+              this.addModelNode(newModelNode);
+            } else if (mode === 'edit') {
+              this.editModelNode(newModelNode);
+            }
+            this.modelChanged = true;
+            this.dateModelChainCanvas.modelService.detectChanges();
+            this.cdr.markForCheck();
+          }
         }
-      }
     );
   }
 
@@ -552,118 +555,6 @@ export class DataModelsComponent implements OnInit {
     this.savedModel = deepClone(this.model);
   }
 
-  public loadNodes: LoadNodesCallback = (node, cb) => {
-    let entityArray = [];
-    if (this.schemaTree.length) {
-      this.schemaTree.forEach(customer => {
-        this.getChildrenRequest(customer, entityArray).then(res => {
-          console.log('entityArray', entityArray.length);
-          cb(entityArray);
-        });
-      });
-    }
-  };
-
-  async getChildrenRequest(parent, array, responseMap = {}) {
-    try {
-      if(parent.children) {
-        const childPromises = parent.children.map(async (child) => {
-          let response;
-
-          if(parent.type === ModelElementType.TENANT) {
-            const authState = getCurrentAuthState(this.store);
-            const authUser = authState.authUser;
-            const entityId = {id: authUser.tenantId, entityType: EntityType.TENANT};
-
-            const relationFilter = {
-              relType: child.data.relationType,
-              entityType: child.type
-            };
-
-            const searchQuery = this.buildSearchQuery(relationFilter, entityId);
-            response = await this.relationService.findInfoByQuery(searchQuery).toPromise();
-            child.entities = [];
-
-            for(const rel of response) {
-              let newCustomer = {
-                icon: false,
-                data: {
-                  id: rel.to,
-                },
-                children: [],
-                text: this.materialIconByEntityType(rel.to.entityType) + rel.toName,
-                id: rel.to.id,
-                parent: '#'
-              };
-              if(!array.find(el => el.id === newCustomer.id)) {
-                child.entities.push(newCustomer)
-                array.push(newCustomer);
-              }
-            }
-            responseMap[child.id] = response;
-          } else {
-            if(parent.entities?.length) {
-              const relationFilter = {
-                relType: child.data.relationType,
-                entityType: child.type
-              };
-              for (const entity of parent.entities) {
-                const searchQuery = this.buildSearchQuery(relationFilter, entity.data.id);
-                response = await this.relationService.findInfoByQuery(searchQuery).toPromise();
-                child.entities = [];
-
-                for(const rel of response) {
-                  let newCustomer = {
-                    icon: false,
-                    data: {
-                      id: rel.to,
-                    },
-                    children: [],
-                    text: this.materialIconByEntityType(rel.to.entityType) + rel.toName,
-                    id: rel.to.id,
-                    parent: searchQuery.parameters.rootId
-                  };
-                  if(!array.find(el => el.id === newCustomer.id)) {
-                    child.entities.push(newCustomer)
-                    array.push(newCustomer);
-                  }
-                }
-              }
-              this.getChildrenRequest(child, array)
-              responseMap[child.id] = response;
-            }
-          }
-
-          await this.getChildrenRequest(child, array, responseMap);
-        });
-
-        await Promise.all(childPromises);;
-      }
-    } catch(error) {
-      console.error('Error for request', error)
-    }
-  }
-
-  buildSearchQuery(rel, parentId) {
-    const newSearchQuery: EntityRelationsQuery = {
-      filters: [
-        {
-          relationType: rel.relType,
-          entityTypes: []
-        }
-      ],
-      parameters: {
-        rootId: parentId.id,
-        rootType: parentId.entityType,
-        direction: EntitySearchDirection.FROM,
-        maxLevel: 1
-      }
-    };
-
-    return newSearchQuery;
-  }
-
-
   private arrayToTree(array: HierarchyParentNavTreeNode[]) {
     const idToNodeMap: {[id: string]: HierarchyParentNavTreeNode} = {};
 
@@ -691,25 +582,6 @@ export class DataModelsComponent implements OnInit {
     return rootNode.children;
   }
 
-  materialIconByEntityType(entityType: string): string {
-    let materialIcon = 'insert_drive_file';
-    switch (entityType) {
-      case 'DEVICE':
-        materialIcon = 'devices_other';
-        break;
-      case 'ASSET':
-        materialIcon = 'domain';
-        break;
-      case 'CUSTOMER':
-        materialIcon = 'supervisor_account';
-        break;
-      case 'TENANT':
-        materialIcon = 'account_circle';
-        break;
-    }
-    return '<mat-icon class="node-icon material-icons" role="img" aria-hidden="false">' + materialIcon + '</mat-icon>';
-  }
-
   private initTenantId() {
     const authState = getCurrentAuthState(this.store);
     const authUser = authState.authUser;
@@ -734,19 +606,27 @@ export class DataModelsComponent implements OnInit {
     return maxLevel;
   }
 
-
   private getSavedModelFromTenantAttribute() {
     this.attributeService.getEntityAttributes(this.tenantId,
-      AttributeScope.SERVER_SCOPE, ['hierarchy-model']).subscribe(data => {
+        AttributeScope.SERVER_SCOPE, ['hierarchy-model']).subscribe(data => {
       const savedInAttributeModel = data[0]?.value as SavedInAttributeModel;
       if (savedInAttributeModel) {
+        try {
+          const generatedEntities = JSON.parse(savedInAttributeModel.generatedEntities);
+          this.dataModelAutoGeneratorService.setCreatedEntities(generatedEntities);
+          this.generatedEntities = generatedEntities;
+        } catch {
+          console.log('ERROR', savedInAttributeModel.generatedEntities)
+        }
         this.setGeneratedDashboardId(savedInAttributeModel.generatedDashboardId);
         const savedModel = JSON.parse(savedInAttributeModel.model);
+        this.dataModelAutoGeneratorService.setCreatedEntities(savedModel?.generatedEntities || []);
         this.model.nodes = [];
         this.model.edges = [];
         this.model.nodes = savedModel.nodes;
         this.model.edges = savedModel.edges;
         this.setSavedModel();
+
         this.schemaTree = this.generateHierarchyTree();
         console.log('TREE', this.schemaTree);
         if(this.schemaTree.length) {
@@ -797,7 +677,7 @@ export class DataModelsComponent implements OnInit {
       type: 'DASHBOARD',
       name: 'Management Dashboard',
       ownerId: this.tenantId,
-    }
+    };
 
     this.entityGroupService.getEntityGroupsByOwnerId('TENANT' as EntityType, this.tenantId.id, 'DASHBOARD' as EntityType).subscribe(res=>{
       if(res.find(x=>x.name == 'Management Dashboard')){
@@ -806,23 +686,32 @@ export class DataModelsComponent implements OnInit {
       if (this.generatedDashboardGroupdId){
         this.importExportService.processImportedDashboard(dashboard as Dashboard, null, this.generatedDashboardGroupdId).subscribe(newManagementDashboard => {
           this.generatedDashboardId = newManagementDashboard.id.id;
-          this.changeDashboardIdForSavedModel();
         });
       } else {
         this.entityGroupService.saveEntityGroup(dashboardGroupObject as EntityGroup).subscribe((result)=>{
           this.importExportService.processImportedDashboard(dashboard as Dashboard, null, result.id.id).subscribe(newManagementDashboard => {
             this.generatedDashboardId = newManagementDashboard.id.id;
-            this.changeDashboardIdForSavedModel();
           });
-        })
+        });
       }
-    })
+      this.updateSavedModel();
+    });
   }
 
-  private changeDashboardIdForSavedModel() {
+  private updateSavedModel(callBack?: () => void) {
+    const newData: SavedInAttributeModel = {
+      generatedDashboardId: this.generatedDashboardId,
+      model: JSON.stringify(this.savedModel),
+      generatedEntities: JSON.stringify(this.dataModelAutoGeneratorService.getCreatedEntities())
+    };
     this.attributeService.saveEntityAttributes(this.tenantId, AttributeScope.SERVER_SCOPE,
-        [{key: 'hierarchy-model', value: {generatedDashboardId: this.generatedDashboardId, model: JSON.stringify(this.savedModel)}}])
-        .subscribe();
+        [{key: 'hierarchy-model',
+          value: newData}])
+        .subscribe(() => {
+          if (callBack) {
+            callBack();
+          }
+        });
   }
 
   private findNextSavedModelElementsId() {
@@ -830,4 +719,10 @@ export class DataModelsComponent implements OnInit {
     this.nextConnectorID = Math.max(...[].concat(...this.model.nodes.map(n => (n.connectors.map(c => +c.id))))) + 1;
   }
 
+  public handleRealDataReceive(e) {
+    this.isShowAutoFillBtn = true;
+    if(!e) {
+      this.showTree = false;
+    }
+  }
 }
