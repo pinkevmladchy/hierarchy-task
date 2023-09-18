@@ -320,11 +320,13 @@ export class DataModelsComponent implements OnInit {
 
   public onAutomaticFilling() {
     this.dialog.open(DataModelCountDialogComponent).afterClosed().subscribe(
-      (count: number) => {
-        if (count) {
+      (data: {count: number; prefix: string}) => {
+        if (data) {
           this.dashboardService.getDashboards([this.generatedDashboardId]).subscribe(dashboards => {
             if(dashboards.length){
-              this.dataModelAutoGeneratorService.autoGenerateHierarchyData(this.schemaTree, this.tenantId, count);
+              this.dataModelAutoGeneratorService.autoGenerateHierarchyData(this.schemaTree, this.tenantId, data.count).subscribe(() => {
+                console.log('SUPER TREE', this.dataModelAutoGeneratorService.schemaTree);
+              });
             } else {
               this.generatedDashboardId = null;
               this.dialog.open(AlertDialogComponent, {

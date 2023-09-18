@@ -50,11 +50,12 @@ export class DataModelCountDialogComponent {
   form: FormGroup;
   constructor(public dialogRef: MatDialogRef<DataModelCountDialogComponent>, private fb: FormBuilder) {
     this.form = this.fb.group({
-      count: [1, [Validators.required, Validators.min(1), Validators.max(3)]]
+      count: [1, [Validators.required, Validators.min(1), Validators.max(3)]],
+      prefix: ['Demo']
     });
   }
 
   public onOk() {
-    this.dialogRef.close(this.form.get('count').value);
+    this.dialogRef.close({count: this.form.get('count').value, prefix: this.form.get('prefix').value});
   }
 }
