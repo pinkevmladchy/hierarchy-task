@@ -13,7 +13,7 @@ import {ModelElementType} from "@home/components/widget/lib/settings/data-models
 export class ModelnodeComponent extends FcNodeComponent implements OnInit, AfterViewInit {
   public iconsObj: {[key in ModelElementType]: string} = {
     [ModelElementType.TENANT]: 'person',
-    [ModelElementType.CUSTOMER]: 'sentiment_dissatisfied',
+    [ModelElementType.CUSTOMER]: 'gpoup',
     [ModelElementType.ASSET]: 'business',
     [ModelElementType.DEVICE]: 'devices'
   };
