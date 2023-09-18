@@ -27,7 +27,7 @@ import {AttributeScope} from '@shared/models/telemetry/telemetry.models';
 import {EntityType} from '@shared/models/entity-type.models';
 import {EntityId} from '@shared/models/id/entity-id';
 import {
-  AdditionalFieldsTypes, AddModelEdgeDialogData, AddModelNodeDialogData,
+  AdditionalFieldsTypes, AddModelEdgeDialogData, AddModelNodeDialogData, AutoGeneratingSettings,
   FCDataModel,
   FcModelNode, ModelAdditionalFieldsObj,
   ModelElementType, ModelEntityValueType, SavedInAttributeModel
@@ -281,7 +281,11 @@ export class DataModelsComponent implements OnInit {
 
   public onSaveModel() {
     this.attributeService.saveEntityAttributes(this.tenantId, AttributeScope.SERVER_SCOPE,
-      [{key: 'hierarchy-model', value: {generatedDashboardId: this.generatedDashboardId, model: JSON.stringify(this.model)}}])
+      [{key: 'hierarchy-model', value: {
+          generatedDashboardId: this.generatedDashboardId,
+          model: JSON.stringify(this.model)
+        },
+    }])
       .subscribe(() => {
         this.setSavedModel();
         this.modelChanged = false;
@@ -320,11 +324,11 @@ export class DataModelsComponent implements OnInit {
 
   public onAutomaticFilling() {
     this.dialog.open(DataModelCountDialogComponent).afterClosed().subscribe(
-      (data: {count: number; prefix: string}) => {
+      (data: AutoGeneratingSettings) => {
         if (data) {
           this.dashboardService.getDashboards([this.generatedDashboardId]).subscribe(dashboards => {
             if(dashboards.length){
-              this.dataModelAutoGeneratorService.autoGenerateHierarchyData(this.schemaTree, this.tenantId, data.count).subscribe(() => {
+              this.dataModelAutoGeneratorService.autoGenerateHierarchyData(this.schemaTree, this.tenantId, data).subscribe(() => {
                 console.log('SUPER TREE', this.dataModelAutoGeneratorService.schemaTree);
               });
             } else {

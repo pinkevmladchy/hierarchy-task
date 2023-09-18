@@ -38,6 +38,13 @@
                   matTooltipPosition="above">
             <mat-icon>G</mat-icon>
           </button>
+          <button [disabled]="(isLoading$ | async)"
+                  mat-fab color="accent" class="tb-btn-footer"
+                  (click)="onAutomaticFilling()"
+                  matTooltip="Delete automatic filled data"
+                  matTooltipPosition="above">
+            <mat-icon>D</mat-icon>
+          </button>
             <button [disabled]="(isLoading$ | async) || model.nodes.length <= 1"
                     mat-fab color="accent" class="tb-btn-footer"
                     (click)="onDeleteModel()"
