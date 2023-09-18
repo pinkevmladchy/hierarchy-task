@@ -34,11 +34,19 @@
 <form [formGroup]="form" (ngSubmit)="onOk()">
       <div mat-dialog-content >
         <mat-form-field class="mat-block">
+          <mat-label>Prefix for all names</mat-label>
+          <input matInput
+                 name="prefix"
+                 formControlName="prefix"
+          />
+        </mat-form-field>
+        <mat-form-field class="mat-block">
           <mat-label>Number of entities</mat-label>
           <input matInput type="number"
                  required
                  min="1"
                  max="2"
+                 step="1"
                  name="count"
                  formControlName="count"
           />
