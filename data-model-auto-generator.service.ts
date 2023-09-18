@@ -25,8 +25,9 @@ import {deepClone} from "@core/utils";
 })
 export class DataModelAutoGeneratorService {
   tenantId!: TenantId;
-  schemaTree: any[];
+  public schemaTree: any[];
   createEntitiesNumber = 1;
+  namePrefix = '';
 
     customersCounter = 1;
     assetCounter = 1;
@@ -45,7 +46,7 @@ export class DataModelAutoGeneratorService {
               private attributeService: AttributeService,
               private entityRelationService: EntityRelationService) { }
 
-  public autoGenerateHierarchyData(schemaTree: any[], tenantId: TenantId, numberEntities: number) {
+  public autoGenerateHierarchyData(schemaTree: any[], tenantId: TenantId, numberEntities: number): Observable<any> {
     this.resetProperties();
 
     this.createEntitiesNumber = numberEntities;
@@ -53,14 +54,14 @@ export class DataModelAutoGeneratorService {
     this.schemaTree = deepClone(schemaTree);
     this.schemaTree[0].entities = [{id: tenantId}]; //tenant node doesn't have this field by default
     this.recursiveMoveToTree(this.createEntitiesObservables.bind(this), [ModelElementType.TENANT]);
-    this.executeRequestsList();
+    return this.executeRequestsList();
     console.log('TREE 1', this.schemaTree);
   }
 
-  private executeRequestsList() {
+  private executeRequestsList(): Observable<any> {
     const entityObservables = this.entitiesObservables.map(el => el.obs);
 
-      forkJoin(entityObservables).pipe(
+      return forkJoin(entityObservables).pipe(
         tap(() => {
           this.createAdditionalItemsObservables();
           this.createDemoRelationsObservables();
@@ -76,9 +77,7 @@ export class DataModelAutoGeneratorService {
           return this.additionalElementsObservables.telemetries.length
             ? forkJoin(this.additionalElementsObservables.telemetries) : of(null);
         })
-      ).subscribe(data => {
-        console.log('FINISHED');
-      });
+      );
     }
 
   private createEntitiesObservables(treeEl: any, parent: any) {
@@ -182,7 +181,7 @@ export class DataModelAutoGeneratorService {
 
   private addCustomerEntityObs(treeEl: any) {
     const newCustomer: Omit<Customer, 'customerId'> = {
-      title: `${treeEl.name} (${this.customersCounter})`,
+      title: `${this.namePrefix}${treeEl.name} (${this.customersCounter})`,
       address: '',
       email: '',
       phone: '',
@@ -193,8 +192,8 @@ export class DataModelAutoGeneratorService {
       tenantId: this.tenantId,
       state: '',
       additionalInfo: {
-        email: `customer-email${this.customersCounter}@site.net`,
-        userName: `${treeEl.name} (${this.customersCounter})`,
+        email: `${this.namePrefix}customer-email${this.customersCounter}@site.net`,
+        userName: `${this.namePrefix}${treeEl.name} (${this.customersCounter})`,
       }
     };
     this.customersCounter++;
@@ -207,9 +206,9 @@ export class DataModelAutoGeneratorService {
 
   private addDeviceEntityObs(treeEl: any) {
     const newDevice: Device = {
-      name: `${treeEl.name} (${this.deviceCounter})`,
+      name: `${this.namePrefix}${treeEl.name} (${this.deviceCounter})`,
       type: 'default',
-      label: `${treeEl.name} (${this.deviceCounter})`
+      label: `${this.namePrefix}${treeEl.name} (${this.deviceCounter})`
     };
     this.deviceCounter++;
     this.entitiesObservables.push({treeEl, obs: this.deviceService.saveDevice(newDevice).pipe(
@@ -221,9 +220,9 @@ export class DataModelAutoGeneratorService {
 
   private addAssetEntityObs(treeEl: any) {
     const newAsset: Asset = {
-      name: `${treeEl.name} (${this.assetCounter})`,
+      name: `${this.namePrefix}${treeEl.name} (${this.assetCounter})`,
       type: 'default',
-      label: `${treeEl.name} (${this.assetCounter})`
+      label: `${this.namePrefix}${treeEl.name} (${this.assetCounter})`
     };
     this.assetCounter++;
     this.entitiesObservables.push({treeEl, obs: this.assetService.saveAsset(newAsset).pipe(
@@ -246,6 +245,7 @@ export class DataModelAutoGeneratorService {
 
       parentEntities.forEach((parentEntity, idx) => {
         for (let i = 0; i < ratio; i++) {
+          currentEntities[0].parent = parentEntity.id.id;
           const newRelation = this.createDemoRelationEl(treeEl.data.relationType, parentEntity.id, currentEntities.shift().id);
           this.relationObservables.push(this.entityRelationService.saveRelation(newRelation));
         }
@@ -293,9 +293,4 @@ export class DataModelAutoGeneratorService {
 }
 
 interface EntitiesObservable {treeEl: any; obs: Observable<any>}
-interface DemoTelemetry {
-  ts: number;
-  values: {
-    [key: string]: string;
-  };
-}
+
