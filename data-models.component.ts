@@ -8,7 +8,7 @@ import {
   ViewChild
 } from '@angular/core';
 import {FlowchartConstants, NgxFlowchartComponent, UserCallbacks} from 'ngx-flowchart';
-import {Observable, of} from 'rxjs';
+import {Observable, of, Subscription} from 'rxjs';
 import {DELETE} from '@angular/cdk/keycodes';
 import {select, Store} from '@ngrx/store';
 import {AppState} from '@core/core.state';
@@ -53,6 +53,7 @@ import {TenantId} from "@shared/models/id/tenant-id";
 import {
   DataModelCountDialogComponent
 } from "@home/components/widget/lib/settings/data-models/data-model-count-dialog/data-model-count-dialog.component";
+import {EntityId} from "@shared/models/id/entity-id";
 
 
 export type ModelTreeNode = Omit<NavTreeNode, 'children'> & {
@@ -95,6 +96,7 @@ export class DataModelsComponent implements OnInit {
   isLoading$: Observable<boolean>;
   public modelChanged = false;
   public savedModel?: FCDataModel;
+  public generatedEntities!: EntityId[];
 
   flowchartConstants = FlowchartConstants;
 
@@ -115,7 +117,8 @@ export class DataModelsComponent implements OnInit {
   schemaTree: any[];
   realDataSchemaTree: any[];
 
-  public showTree = false;
+  public showTree!: boolean;
+  public isShowAutoFillBtn!: boolean;
 
   editCallbacks: UserCallbacks = {
     edgeDoubleClick: (event, edge) => {
@@ -164,6 +167,8 @@ export class DataModelsComponent implements OnInit {
   private tenantId!: TenantId;
   private generatedDashboardGroupdId!: string | null;
 
+  private subs = new Subscription();
+
   constructor(public dialog: MatDialog,
               private cdr: ChangeDetectorRef,
               private attributeService: AttributeService,
@@ -172,7 +177,7 @@ export class DataModelsComponent implements OnInit {
               private dashboardService: DashboardService,
               private entityGroupService: EntityGroupService,
               private importExportService: ImportExportService,
-              private dataModelAutoGeneratorService: DataModelAutoGeneratorService,
+              public dataModelAutoGeneratorService: DataModelAutoGeneratorService,
               private store: Store<AppState>) {
     this.isLoading$ = this.store.pipe(delay(0), select(selectIsLoading), share());
     this.initData();
@@ -249,7 +254,7 @@ export class DataModelsComponent implements OnInit {
     }
 
     const additionalFields: ModelAdditionalFieldsObj = Object.keys(AdditionalFieldsTypes)
-      .map(name => ({ [name]: [] })) as ModelAdditionalFieldsObj;
+        .map(name => ({ [name]: [] })) as ModelAdditionalFieldsObj;
 
     const newNode: FcModelNode = {
       name: nodeName,
@@ -275,16 +280,11 @@ export class DataModelsComponent implements OnInit {
   }
 
   public onSaveModel() {
-    this.attributeService.saveEntityAttributes(this.tenantId, AttributeScope.SERVER_SCOPE,
-      [{key: 'hierarchy-model', value: {
-          generatedDashboardId: this.generatedDashboardId,
-          model: JSON.stringify(this.model)
-        },
-    }])
-      .subscribe(() => {
-        this.setSavedModel();
-        this.modelChanged = false;
-      });
+    const callBackAfterUpdate = () => {
+      this.setSavedModel();
+      this.modelChanged = false;
+    };
+    this.updateSavedModel(callBackAfterUpdate);
   }
 
   public onGenerateDashboard() {
@@ -317,32 +317,38 @@ export class DataModelsComponent implements OnInit {
     };
   };
 
+  public onDeleteAutomaticFillingData() {
+    console.log('ENTITIES', this.generatedEntities);
+  }
+
   public onAutomaticFilling() {
     this.dialog.open(DataModelCountDialogComponent).afterClosed().subscribe(
-      (data: AutoGeneratingSettings) => {
-        if (data) {
-          this.dashboardService.getDashboards([this.generatedDashboardId]).subscribe(dashboards => {
-            if(dashboards.length){
-              this.dataModelAutoGeneratorService.autoGenerateHierarchyData(this.schemaTree, this.tenantId, data.count).subscribe(() => {
-                this.realDataSchemaTree = this.dataModelAutoGeneratorService.schemaTree;
-                this.showTree = true;
-                console.log('SUPER TREE', this.dataModelAutoGeneratorService.schemaTree);
-              });
-            } else {
-              this.generatedDashboardId = null;
-              this.dialog.open(AlertDialogComponent, {
-                disableClose: true,
-                panelClass: [],
-                data: {
-                  title: 'Dashboard is missing',
-                  message: 'First you need to generate a dashboard',
-                  ok: 'OK'
-                }
-              });
-            }
-          });
+        (data: AutoGeneratingSettings) => {
+          if (data) {
+            this.dashboardService.getDashboards([this.generatedDashboardId]).subscribe(dashboards => {
+              if(dashboards.length){
+                this.dataModelAutoGeneratorService.autoGenerateHierarchyData(this.schemaTree, this.tenantId, data).subscribe(() => {
+                  this.realDataSchemaTree = this.dataModelAutoGeneratorService.schemaTree;
+                  this.generatedEntities = this.dataModelAutoGeneratorService.getCreatedEntities();
+                  this.showTree = true;
+                  console.log(333333333333)
+                  this.updateSavedModel();
+                });
+              } else {
+                this.generatedDashboardId = null;
+                this.dialog.open(AlertDialogComponent, {
+                  disableClose: true,
+                  panelClass: [],
+                  data: {
+                    title: 'Dashboard is missing',
+                    message: 'First you need to generate a dashboard',
+                    ok: 'OK'
+                  }
+                });
+              }
+            });
+          }
         }
-      }
     );
   }
 
@@ -384,22 +390,22 @@ export class DataModelsComponent implements OnInit {
     this.inputConnectorId = this.nextConnectorID++;
 
     this.model.nodes.push(
-      {
-        id: (this.nextNodeID++).toString(), // todo maybe change to number
-        name: 'Tenant',
-        type: ModelElementType.TENANT,
-        readonly: true,
-        added: true,
-        additionalFields: {},
-        x: 50,
-        y: 100,
-        connectors: [
-          {
-            type: FlowchartConstants.rightConnectorType,
-            id: this.inputConnectorId + ''
-          },
-        ]
-      }
+        {
+          id: (this.nextNodeID++).toString(), // todo maybe change to number
+          name: 'Tenant',
+          type: ModelElementType.TENANT,
+          readonly: true,
+          added: true,
+          additionalFields: {},
+          x: 50,
+          y: 100,
+          connectors: [
+            {
+              type: FlowchartConstants.rightConnectorType,
+              id: this.inputConnectorId + ''
+            },
+          ]
+        }
     );
   }
 
@@ -424,14 +430,14 @@ export class DataModelsComponent implements OnInit {
       }
     }).afterClosed().subscribe((newModelEdge: FcEdge) => {
       if (newModelEdge) {
-          if (mode === 'add') {
-            modelEdge.label = newModelEdge.label;
-          } else if (mode === 'edit') {
-            modelEdge.label = newModelEdge.label;
-          }
-          this.modelChanged = true;
-          this.dateModelChainCanvas.modelService.detectChanges();
-          this.cdr.markForCheck();
+        if (mode === 'add') {
+          modelEdge.label = newModelEdge.label;
+        } else if (mode === 'edit') {
+          modelEdge.label = newModelEdge.label;
+        }
+        this.modelChanged = true;
+        this.dateModelChainCanvas.modelService.detectChanges();
+        this.cdr.markForCheck();
       }
     });
   }
@@ -443,7 +449,7 @@ export class DataModelsComponent implements OnInit {
     const endNode = this.model.nodes.find(n => n.connectors.some(c => c.id === modelEdge.destination));
 
     if ((startNode.type === ModelElementType.ASSET || startNode.type === ModelElementType.DEVICE)
-      && endNode.type === ModelElementType.CUSTOMER) {
+        && endNode.type === ModelElementType.CUSTOMER) {
       this.dialog.open(AlertDialogComponent, {
         disableClose: true,
         panelClass: [],
@@ -471,18 +477,18 @@ export class DataModelsComponent implements OnInit {
         modelNodesSavedNamesList: otherNodeNamesList
       }
     }).afterClosed().subscribe(
-      (newModelNode: FcModelNode) => {
-        if (newModelNode) {
-         if (mode === 'add') {
-           this.addModelNode(newModelNode);
-         } else if (mode === 'edit') {
-           this.editModelNode(newModelNode);
-         }
-          this.modelChanged = true;
-          this.dateModelChainCanvas.modelService.detectChanges();
-          this.cdr.markForCheck();
+        (newModelNode: FcModelNode) => {
+          if (newModelNode) {
+            if (mode === 'add') {
+              this.addModelNode(newModelNode);
+            } else if (mode === 'edit') {
+              this.editModelNode(newModelNode);
+            }
+            this.modelChanged = true;
+            this.dateModelChainCanvas.modelService.detectChanges();
+            this.cdr.markForCheck();
+          }
         }
-      }
     );
   }
 
@@ -600,19 +606,27 @@ export class DataModelsComponent implements OnInit {
     return maxLevel;
   }
 
-
   private getSavedModelFromTenantAttribute() {
     this.attributeService.getEntityAttributes(this.tenantId,
-      AttributeScope.SERVER_SCOPE, ['hierarchy-model']).subscribe(data => {
+        AttributeScope.SERVER_SCOPE, ['hierarchy-model']).subscribe(data => {
       const savedInAttributeModel = data[0]?.value as SavedInAttributeModel;
       if (savedInAttributeModel) {
+        try {
+          const generatedEntities = JSON.parse(savedInAttributeModel.generatedEntities);
+          this.dataModelAutoGeneratorService.setCreatedEntities(generatedEntities);
+          this.generatedEntities = generatedEntities;
+        } catch {
+          console.log('ERROR', savedInAttributeModel.generatedEntities)
+        }
         this.setGeneratedDashboardId(savedInAttributeModel.generatedDashboardId);
         const savedModel = JSON.parse(savedInAttributeModel.model);
+        this.dataModelAutoGeneratorService.setCreatedEntities(savedModel?.generatedEntities || []);
         this.model.nodes = [];
         this.model.edges = [];
         this.model.nodes = savedModel.nodes;
         this.model.edges = savedModel.edges;
         this.setSavedModel();
+
         this.schemaTree = this.generateHierarchyTree();
         console.log('TREE', this.schemaTree);
         if(this.schemaTree.length) {
@@ -663,7 +677,7 @@ export class DataModelsComponent implements OnInit {
       type: 'DASHBOARD',
       name: 'Management Dashboard',
       ownerId: this.tenantId,
-    }
+    };
 
     this.entityGroupService.getEntityGroupsByOwnerId('TENANT' as EntityType, this.tenantId.id, 'DASHBOARD' as EntityType).subscribe(res=>{
       if(res.find(x=>x.name == 'Management Dashboard')){
@@ -672,23 +686,32 @@ export class DataModelsComponent implements OnInit {
       if (this.generatedDashboardGroupdId){
         this.importExportService.processImportedDashboard(dashboard as Dashboard, null, this.generatedDashboardGroupdId).subscribe(newManagementDashboard => {
           this.generatedDashboardId = newManagementDashboard.id.id;
-          this.changeDashboardIdForSavedModel();
         });
       } else {
         this.entityGroupService.saveEntityGroup(dashboardGroupObject as EntityGroup).subscribe((result)=>{
           this.importExportService.processImportedDashboard(dashboard as Dashboard, null, result.id.id).subscribe(newManagementDashboard => {
             this.generatedDashboardId = newManagementDashboard.id.id;
-            this.changeDashboardIdForSavedModel();
           });
-        })
+        });
       }
-    })
+      this.updateSavedModel();
+    });
   }
 
-  private changeDashboardIdForSavedModel() {
+  private updateSavedModel(callBack?: () => void) {
+    const newData: SavedInAttributeModel = {
+      generatedDashboardId: this.generatedDashboardId,
+      model: JSON.stringify(this.savedModel),
+      generatedEntities: JSON.stringify(this.dataModelAutoGeneratorService.getCreatedEntities())
+    };
     this.attributeService.saveEntityAttributes(this.tenantId, AttributeScope.SERVER_SCOPE,
-        [{key: 'hierarchy-model', value: {generatedDashboardId: this.generatedDashboardId, model: JSON.stringify(this.savedModel)}}])
-        .subscribe();
+        [{key: 'hierarchy-model',
+          value: newData}])
+        .subscribe(() => {
+          if (callBack) {
+            callBack();
+          }
+        });
   }
 
   private findNextSavedModelElementsId() {
@@ -697,6 +720,7 @@ export class DataModelsComponent implements OnInit {
   }
 
   public handleRealDataReceive(e) {
+    this.isShowAutoFillBtn = true;
     if(!e) {
       this.showTree = false;
     }
