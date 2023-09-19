@@ -1,4 +1,5 @@
 <div class="fc-container">
+  <mat-spinner class="tb-loader" *ngIf="isLoadingLocal"></mat-spinner>
   <div class="fc-left-pane">
     <fc-canvas id="tb-data-models-list-canvas" [model]="nodeTypesModel" [selectedObjects]="nodeTypesFlowchartSelected"
                [automaticResize]="false"
@@ -17,14 +18,14 @@
                     matTooltipPosition="above">
                 <mat-icon>done</mat-icon>
             </button>
-          <button [disabled]="(isLoading$ | async) || !modelChanged || !savedModel"
+          <button [disabled]="(isLoading$ | async) || isLoadingLocal || !modelChanged || !savedModel"
                   mat-fab color="accent" class="tb-btn-footer"
                   (click)="onCancelChanges()"
                   matTooltip="Cancel changes"
                   matTooltipPosition="above">
             <mat-icon>close</mat-icon>
           </button>
-          <button [disabled]="(isLoading$ | async) || !savedModel || modelChanged"
+          <button [disabled]="(isLoading$ | async) || isLoadingLocal || !savedModel || modelChanged"
                   mat-fab color="accent" class="tb-btn-footer"
                   (click)="onGenerateDashboard()"
                   matTooltip="Generate dashboard"
@@ -33,7 +34,7 @@
           </button>
           <ng-container *ngIf="isShowAutoFillBtn">
             <ng-container *ngIf="generatedEntities.length === 0 || !showTree; else autoFillBtn">
-              <button [disabled]="(isLoading$ | async) || !savedModel || modelChanged || !generatedDashboardId"
+              <button [disabled]="(isLoading$ | async) || isLoadingLocal || !savedModel || modelChanged || !generatedDashboardId"
                       mat-fab color="accent" class="tb-btn-footer"
                       (click)="onAutomaticFilling()"
                       matTooltip="Automatic filling"
@@ -42,7 +43,7 @@
               </button>
             </ng-container>
             <ng-template #autoFillBtn>
-              <button [disabled]="(isLoading$ | async)"
+              <button [disabled]="(isLoading$ | async) || isLoadingLocal"
                       mat-fab color="accent" class="tb-btn-footer"
                       (click)="onDeleteAutomaticFillingData()"
                       matTooltip="Delete automatic filled data"
@@ -51,7 +52,7 @@
               </button>
             </ng-template>
           </ng-container>
-            <button [disabled]="(isLoading$ | async) || model.nodes.length <= 1"
+            <button [disabled]="(isLoading$ | async) || isLoadingLocal || model.nodes.length <= 1"
                     mat-fab color="accent" class="tb-btn-footer"
                     (click)="onDeleteModel()"
                     matTooltip="Reset model"

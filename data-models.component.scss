@@ -10,6 +10,14 @@
     flex: 1;
     flex-direction: row;
     overflow: hidden;
+    position: relative;
+
+    .tb-loader {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+    }
   }
 
   .fc-left-pane {

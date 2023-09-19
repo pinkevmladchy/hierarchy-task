@@ -29,7 +29,7 @@ import {
   FcModelNode, ModelAdditionalFieldsObj,
   ModelElementType, SavedInAttributeModel, SavedModelEdge
 } from '@home/components/widget/lib/settings/data-models/model-node.models';
-import {delay, share} from 'rxjs/operators';
+import {delay, finalize, share} from 'rxjs/operators';
 import {selectIsLoading} from '@core/interceptors/load.selectors';
 import {
   AddModelNodeDialogComponent
@@ -94,6 +94,7 @@ export class DataModelsComponent implements OnInit {
   @ViewChild('dateModelChainCanvas', {static: true}) dateModelChainCanvas: NgxFlowchartComponent;
 
   isLoading$: Observable<boolean>;
+  isLoadingLocal = false;
   public modelChanged = false;
   public savedModel?: FCDataModel;
   public generatedEntities!: EntityId[];
@@ -318,12 +319,30 @@ export class DataModelsComponent implements OnInit {
   };
 
   public onDeleteAutomaticFillingData() {
-    this.dataModelAutoGeneratorService.deleteCreatedEntities(this.generatedEntities).subscribe((data => {
-      this.generatedEntities = [];
-      this.dataModelAutoGeneratorService.clearCreatedEntities();
-      this.updateSavedModel();
-      this.showTree = false;
-    }))
+    const dialogConfig: MatDialogConfig = {
+      disableClose: false,
+      data: {
+        title: 'Are you sure you want to delete all automatically generated entities?',
+        message: 'All customers, assets and devices that were generated using the autogenerator will be deleted.',
+        cancel: 'Cancel',
+        ok: 'Ok'
+      }
+    };
+    this.dialog.open(ConfirmDialogComponent, dialogConfig).afterClosed().subscribe((confirmed: boolean) => {
+      if (confirmed) {
+        this.isLoadingLocal = true;
+        this.dataModelAutoGeneratorService.deleteCreatedEntities(this.generatedEntities)
+            .pipe(finalize(() => this.isLoadingLocal = false)).subscribe((data => {
+          this.generatedEntities = [];
+          this.dataModelAutoGeneratorService.clearCreatedEntities();
+          this.updateSavedModel();
+          this.showTree = false;
+        }));
+      } else if (confirmed === false) {
+        this.generateManagementDashboard(null);
+      }
+    });
+
   }
 
   public onAutomaticFilling() {
@@ -332,27 +351,35 @@ export class DataModelsComponent implements OnInit {
     this.dialog.open(DataModelCountDialogComponent).afterClosed().subscribe(
         (data: AutoGeneratingSettings) => {
           if (data) {
-            this.dashboardService.getDashboards([this.generatedDashboardId]).subscribe(dashboards => {
-              if(dashboards.length){
-                this.dataModelAutoGeneratorService.autoGenerateHierarchyData(this.schemaTree, this.tenantId, data).subscribe(() => {
-                  this.realDataSchemaTree = this.dataModelAutoGeneratorService.schemaTree;
-                  this.generatedEntities = this.dataModelAutoGeneratorService.getCreatedEntities();
-                  this.showTree = true;
-                  this.updateSavedModel();
-                });
-              } else {
-                this.generatedDashboardId = null;
-                this.dialog.open(AlertDialogComponent, {
-                  disableClose: true,
-                  panelClass: [],
-                  data: {
-                    title: 'Dashboard is missing',
-                    message: 'First you need to generate a dashboard',
-                    ok: 'OK'
-                  }
-                });
-              }
-            });
+            this.isLoadingLocal = true;
+            this.dashboardService.getDashboards([this.generatedDashboardId])
+                .subscribe(
+                    {next: (dashboards) => {
+                        if(dashboards.length){
+                          this.dataModelAutoGeneratorService.autoGenerateHierarchyData(this.schemaTree, this.tenantId, data).subscribe(() => {
+                            this.realDataSchemaTree = this.dataModelAutoGeneratorService.schemaTree;
+                            this.generatedEntities = this.dataModelAutoGeneratorService.getCreatedEntities();
+                            this.showTree = true;
+                            this.updateSavedModel();
+                            this.isLoadingLocal = false;
+                          });
+                        } else {
+                          this.generatedDashboardId = null;
+                          this.dialog.open(AlertDialogComponent, {
+                            disableClose: true,
+                            panelClass: [],
+                            data: {
+                              title: 'Dashboard is missing',
+                              message: 'First you need to generate a dashboard',
+                              ok: 'OK'
+                            }
+                          });
+                        }
+                      },
+                      error: () => {
+                        this.isLoadingLocal = false;
+                      }
+                    });
           }
         }
     );
@@ -463,7 +490,7 @@ export class DataModelsComponent implements OnInit {
 
     const isDoubleEdge = this.model.edges.some(edge => edge.destination === modelEdge.destination);
     const isEdgeToCustomerFromUnsuitableNode = (startNode.type === ModelElementType.ASSET || startNode.type === ModelElementType.DEVICE)
-      && endNode.type === ModelElementType.CUSTOMER;
+        && endNode.type === ModelElementType.CUSTOMER;
 
     if (isDoubleEdge || isEdgeToCustomerFromUnsuitableNode) {
       let title = '';

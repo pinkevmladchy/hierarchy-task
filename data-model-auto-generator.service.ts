@@ -244,7 +244,6 @@ export class DataModelAutoGeneratorService {
       };
       result.push(demoTelemetry);
     }
-    console.log('telemetry', result);
     return result;
   }
 
