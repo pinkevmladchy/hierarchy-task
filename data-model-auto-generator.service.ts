@@ -8,25 +8,21 @@ import {
 import {CustomerService} from '@core/http/customer.service';
 import {Customer} from '@shared/models/customer.model';
 import {TenantId} from '@shared/models/id/tenant-id';
-import {BehaviorSubject, bufferCount, concatMap, forkJoin, from, mergeMap, Observable, of, switchMap} from 'rxjs';
+import {BehaviorSubject, forkJoin, Observable, of, switchMap} from 'rxjs';
 import {AssetService} from '@core/http/asset.service';
 import {Asset} from '@shared/models/asset.models';
 import {DeviceService} from '@core/http/device.service';
 import {Device} from '@shared/models/device.models';
 import {AttributeService} from "@core/http/attribute.service";
-import {delay, tap} from "rxjs/operators";
+import {catchError, tap} from "rxjs/operators";
 import {EntityId} from "@shared/models/id/entity-id";
-import {
-  AttributeData,
-  AttributeScope,
-  LatestTelemetry,
-  TimeseriesData
-} from "@shared/models/telemetry/telemetry.models";
+import {AttributeData, AttributeScope} from "@shared/models/telemetry/telemetry.models";
 import {EntityRelationService} from "@core/http/entity-relation.service";
 import {EntityRelation, RelationTypeGroup} from "@shared/models/relation.models";
 import {deepClone} from "@core/utils";
 import {HttpClient} from "@angular/common/http";
 import {EntityGroupService} from "@core/http/entity-group.service";
+import {EntityType} from "@shared/models/entity-type.models";
 
 @Injectable({
   providedIn: 'root'
@@ -84,6 +80,51 @@ export class DataModelAutoGeneratorService {
     }
   }
 
+  public deleteCreatedEntities(entitiesList: EntityId[]): Observable<any> {
+    const customers: EntityId[] = [];
+    const assets: EntityId[] = [];
+    const devices: EntityId[] = [];
+
+    const customersDeleteObs: Observable<any>[] = [];
+    const assetsDeleteObs: Observable<any>[] = [];
+    const devicesDeleteObs: Observable<any>[] = [];
+
+    entitiesList.forEach(entity => {
+      if (entity.entityType === EntityType.CUSTOMER) {
+        customers.push(entity);
+      } else if (entity.entityType === EntityType.ASSET) {
+        assets.push(entity);
+      } else if (entity.entityType === EntityType.DEVICE) {
+        devices.push(entity);
+      }
+    });
+
+    customers.forEach(customer => {
+      customersDeleteObs.push(this.customerService.deleteCustomer(customer.id).pipe(catchError(() => {
+        return of(null);
+      })));
+    });
+    assets.forEach(asset => {
+      assetsDeleteObs.push(this.assetService.deleteAsset(asset.id).pipe(catchError(() => {
+        return of(null);
+      })));
+    })
+    devices.forEach(device => {
+      devicesDeleteObs.push(this.deviceService.deleteDevice(device.id).pipe(catchError(() => {
+        return of(null);
+      })));
+    })
+
+    return forkJoin(devicesDeleteObs).pipe(
+      switchMap(() => {
+        return assetsDeleteObs.length ? forkJoin(assetsDeleteObs) : of(null);
+      }),
+      switchMap(() => {
+        return  customersDeleteObs.length ? forkJoin(customersDeleteObs) : of(null);
+      }),
+    );
+  }
+
   public clearCreatedEntities() {
     this.createdEntityeIds$$.next([]);
   }
@@ -99,7 +140,6 @@ export class DataModelAutoGeneratorService {
       tap(() => {
         this.createAdditionalItemsObservables();
         this.createDemoRelationsObservables();
-        console.log('TREE 2', this.createdEntityeIds$$.value);
       }),
       switchMap(() => {
         return this.entitiesForChangeOwners.length ? forkJoin(this.entitiesForChangeOwners) : of(null);

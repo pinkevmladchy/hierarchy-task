@@ -32,8 +32,7 @@
             <mat-icon>dashboard</mat-icon>
           </button>
           <ng-container *ngIf="isShowAutoFillBtn">
-            {{generatedEntities.length > 0}} {{showTree}}
-            <ng-container *ngIf="generatedEntities.length === 0 && !showTree; else autoFillBtn">
+            <ng-container *ngIf="generatedEntities.length === 0 || !showTree; else autoFillBtn">
               <button [disabled]="(isLoading$ | async) || !savedModel || modelChanged || !generatedDashboardId"
                       mat-fab color="accent" class="tb-btn-footer"
                       (click)="onAutomaticFilling()"

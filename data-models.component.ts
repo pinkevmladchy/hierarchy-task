@@ -314,11 +314,16 @@ export class DataModelsComponent implements OnInit {
       });
     } else {
       this.generateManagementDashboard(null);
-    };
+    }
   };
 
   public onDeleteAutomaticFillingData() {
-    console.log('ENTITIES', this.generatedEntities);
+    this.dataModelAutoGeneratorService.deleteCreatedEntities(this.generatedEntities).subscribe((data => {
+      this.generatedEntities = [];
+      this.dataModelAutoGeneratorService.clearCreatedEntities();
+      this.updateSavedModel();
+      this.showTree = false;
+    }))
   }
 
   public onAutomaticFilling() {
