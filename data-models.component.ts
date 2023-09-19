@@ -450,18 +450,31 @@ export class DataModelsComponent implements OnInit {
 
   private checkCanCreateRelation(modelEdge: FcEdge): boolean {
     console.log('modelEdge', modelEdge);
-
     const startNode = this.model.nodes.find(n => n.connectors.some(c => c.id === modelEdge.source));
     const endNode = this.model.nodes.find(n => n.connectors.some(c => c.id === modelEdge.destination));
 
-    if ((startNode.type === ModelElementType.ASSET || startNode.type === ModelElementType.DEVICE)
-        && endNode.type === ModelElementType.CUSTOMER) {
+    const isDoubleEdge = this.model.edges.some(edge => edge.destination === modelEdge.destination);
+    const isEdgeToCustomerFromUnsuitableNode = (startNode.type === ModelElementType.ASSET || startNode.type === ModelElementType.DEVICE)
+      && endNode.type === ModelElementType.CUSTOMER;
+
+    if (isDoubleEdge || isEdgeToCustomerFromUnsuitableNode) {
+      let title = '';
+      let description = '';
+
+      if (isDoubleEdge) {
+        title = 'You cannot create more than one input edge';
+        description = 'Each node can have only one input edge and an unlimited number of output ones.';
+      } else if (isEdgeToCustomerFromUnsuitableNode) {
+        title = 'You cannot connect a customer with this type';
+        description = 'A customer can only be placed after a tenant or another customer';
+      }
+
       this.dialog.open(AlertDialogComponent, {
         disableClose: true,
         panelClass: [],
         data: {
-          title: 'You cannot connect a customer with this type',
-          message: 'A customer can only be placed after a tenant or another customer',
+          title,
+          message: description,
           ok: 'OK'
         }
       });

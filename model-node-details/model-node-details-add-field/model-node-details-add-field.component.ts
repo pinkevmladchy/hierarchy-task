@@ -46,10 +46,10 @@ export class ModelNodeDetailsAddFieldComponent implements OnInit, OnDestroy {
   public isEnumAvailable = false;
 
   constructor(
-      protected store: Store<AppState>,
-      private fb: UntypedFormBuilder,
-      public dialogRef: MatDialogRef<ModelNodeDetailsAddFieldComponent>,
-      @Inject(MAT_DIALOG_DATA) public data: {type: AdditionalFieldsTypes; field: ModelAdditionalField}) {
+    protected store: Store<AppState>,
+    private fb: UntypedFormBuilder,
+    public dialogRef: MatDialogRef<ModelNodeDetailsAddFieldComponent>,
+    @Inject(MAT_DIALOG_DATA) public data: {type: AdditionalFieldsTypes; field: ModelAdditionalField}) {
 
     this.isLoading$ = this.store.pipe(delay(0), select(selectIsLoading), share());
     this.currentFieldType = data.type;
