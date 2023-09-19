@@ -43,12 +43,13 @@ export class ModelNodeDetailsAddFieldComponent implements OnInit, OnDestroy {
   private subs = new Subscription();
   public isEnum = false;
   public isRequired = false;
+  public isEnumAvailable = false;
 
   constructor(
-    protected store: Store<AppState>,
-    private fb: UntypedFormBuilder,
-    public dialogRef: MatDialogRef<ModelNodeDetailsAddFieldComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: {type: AdditionalFieldsTypes; field: ModelAdditionalField}) {
+      protected store: Store<AppState>,
+      private fb: UntypedFormBuilder,
+      public dialogRef: MatDialogRef<ModelNodeDetailsAddFieldComponent>,
+      @Inject(MAT_DIALOG_DATA) public data: {type: AdditionalFieldsTypes; field: ModelAdditionalField}) {
 
     this.isLoading$ = this.store.pipe(delay(0), select(selectIsLoading), share());
     this.currentFieldType = data.type;
@@ -58,8 +59,14 @@ export class ModelNodeDetailsAddFieldComponent implements OnInit, OnDestroy {
   ngOnInit() {
     this.setFormGroups();
     this.buildForm();
-    this.isEnum = this.field.isEnum;
-    this.isRequired = this.field.isRequired;
+
+    if(this.currentFieldType === this.AdditionalFields.ATTRIBUTES) {
+      this.isEnum = this.field.isEnum;
+      this.isRequired = this.field.isRequired;
+      if(this.modelNodeAdditionalFieldForm.get('type').value === this.valueTypeEnum.STRING || this.modelNodeAdditionalFieldForm.get('type').value.type === this.valueTypeEnum.INTEGER) {
+        this.isEnumAvailable = true;
+      }
+    }
 
     this.subs.add(
       this.modelNodeAdditionalFieldForm.get('name').valueChanges.subscribe(() => {
@@ -97,21 +104,33 @@ export class ModelNodeDetailsAddFieldComponent implements OnInit, OnDestroy {
         isEnum: [this.field?.isEnum || false],
         isRequired: [this.field?.isRequired || false],
         enumOptions: [this.field?.enumOptions || []]
-      })
+      },{updateOn: 'change'})
     };
 
     this.formGroups[this.currentFieldType].addControl('name', nameControl);
   }
 
   public addOption(e) {
-    const enumOptions = this.modelNodeAdditionalFieldForm.get('enumOptions');
-    enumOptions.value.push(e.value);
-    enumOptions.updateValueAndValidity();
-    e.chipInput!.clear();
+    if(e.value.trim().length) {
+      const enumOptions = this.modelNodeAdditionalFieldForm.get('enumOptions');
+
+      enumOptions.value.push(e.value);
+      enumOptions.updateValueAndValidity();
+      this.modelNodeAdditionalFieldForm.get('name').markAsTouched();
+      e.chipInput!.clear();
+    }
   }
 
   public handleEnumChecked(e) {
+    const enumOptions = this.modelNodeAdditionalFieldForm.get('enumOptions');
     this.isEnum = e.checked;
+    if(!e.checked) {
+      enumOptions.value.splice(0, enumOptions.value.length);
+      enumOptions.setValidators([]);
+    } else {
+      enumOptions.setValidators([Validators.required]);
+    }
+    enumOptions.updateValueAndValidity();
     this.modelNodeAdditionalFieldForm.get('name').markAsTouched();
   }
 
@@ -123,5 +142,20 @@ export class ModelNodeDetailsAddFieldComponent implements OnInit, OnDestroy {
   public removeOption(index) {
     const enumOptions = this.modelNodeAdditionalFieldForm.get('enumOptions');
     enumOptions.value.splice(index, 1);
+    if(!enumOptions.value.length) {
+      this.modelNodeAdditionalFieldForm.markAsUntouched();
+    }
+  }
+
+  public handleValueTypeChange(e) {
+    const enumOptions = this.modelNodeAdditionalFieldForm.get('enumOptions');
+    enumOptions.value.splice(0, enumOptions.value.length);
+    enumOptions.updateValueAndValidity();
+
+    if(e.value === this.valueTypeEnum.STRING || e.value === this.valueTypeEnum.INTEGER) {
+      this.isEnumAvailable = true;
+    } else {
+      this.isEnumAvailable = false;
+    }
   }
 }

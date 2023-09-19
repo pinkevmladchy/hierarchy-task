@@ -20,7 +20,7 @@
       </mat-form-field>
       <mat-form-field *ngIf="currentFieldType ===  AdditionalFields.ATTRIBUTES" fxFlex class="mat-block tb-value-type">
         <mat-label translate>value.type</mat-label>
-        <mat-select [formControlName]="'type'">
+        <mat-select [formControlName]="'type'" (selectionChange)="handleValueTypeChange($event)">
           <mat-select-trigger>
             <mat-icon svgIcon="{{ valueTypes.get(modelNodeAdditionalFieldForm.value.type ).icon }}"></mat-icon>
             <span>{{ valueTypes.get(modelNodeAdditionalFieldForm.value.type).name | translate }}</span>
@@ -34,12 +34,12 @@
       <div fxFlex class="mat-block" *ngIf="currentFieldType ===  AdditionalFields.ATTRIBUTES">
         <mat-checkbox formControlName="isRequired" (change)="handleRequiredChecked($event)">Required</mat-checkbox>
       </div>
-      <div fxFlex class="mat-block" *ngIf="currentFieldType ===  AdditionalFields.ATTRIBUTES && (modelNodeAdditionalFieldForm.get('type').value === valueTypeEnum.INTEGER || modelNodeAdditionalFieldForm.get('type').value === valueTypeEnum.STRING)">
+      <div fxFlex class="mat-block" *ngIf="currentFieldType ===  AdditionalFields.ATTRIBUTES && isEnumAvailable">
         <mat-checkbox formControlName="isEnum" (change)="handleEnumChecked($event)">Enum</mat-checkbox>
       </div>
-      <mat-form-field fxFlex class="mat-block" *ngIf="isEnum && modelNodeAdditionalFieldForm.get('enumOptions')">
+      <mat-form-field fxFlex class="mat-block" *ngIf="isEnumAvailable && isEnum && modelNodeAdditionalFieldForm.get('enumOptions')">
         <mat-label>Possible values</mat-label>
-        <mat-chip-grid #chipGrid aria-label="Enter value" formControlName="enumOptions">
+        <mat-chip-grid #chipGrid aria-label="Enter value" formControlName="enumOptions" matTooltip="Press enter to add the option">
           <mat-chip-row *ngFor="let option of modelNodeAdditionalFieldForm.get('enumOptions').value; let i = index" (removed)="removeOption(i)">
             {{option}}
             <button matChipRemove>

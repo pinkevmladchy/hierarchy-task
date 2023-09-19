@@ -76,7 +76,8 @@
                     <mat-cell *matCellDef="let element">
                       <div class="cell-with-icon">
                         <mat-icon svgIcon="{{ valueTypes.get(element.type)?.icon }}"></mat-icon>
-                        <span>{{ valueTypes.get(element.type)?.name | translate }}</span>
+                        <span *ngIf="element.isEnum">Enum (T {{valueTypes.get(element.type)?.name | translate }})</span>
+                        <span *ngIf="!element.isEnum">{{valueTypes.get(element.type)?.name | translate }}</span>
                       </div>
                     </mat-cell>
                   </ng-container>
