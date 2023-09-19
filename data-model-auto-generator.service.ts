@@ -285,7 +285,7 @@ export class DataModelAutoGeneratorService {
   private addDeviceEntityObs(treeEl: any) {
     const newDevice: Device = {
       name: `${this.namePrefix}${treeEl.name} (${this.deviceCounter})`,
-      type: 'default',
+      type: `${treeEl.name}`,
       label: `${this.namePrefix}${treeEl.name} (${this.deviceCounter})`
     };
     this.deviceCounter++;
