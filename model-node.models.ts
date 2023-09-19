@@ -23,8 +23,16 @@ export interface AddModelNodeDialogData {
 }
 
 export interface AddModelEdgeDialogData {
+  edgeDestinationType: ModelElementType;
   edge: FcEdge;
-  modelEdgesSavedNamesList: string[];
+  modelEdgesSavedNamesList: SavedModelEdge[];
+}
+
+export interface SavedModelEdge {
+  label: string;
+  source: string;
+  destination: string;
+  destinationType: ModelElementType;
 }
 
 export interface FcModelNode extends FcNode {
