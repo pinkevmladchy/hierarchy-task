@@ -27,7 +27,7 @@ import {
   AdditionalFieldsTypes, AddModelEdgeDialogData, AddModelNodeDialogData, AutoGeneratingSettings,
   FCDataModel,
   FcModelNode, ModelAdditionalFieldsObj,
-  ModelElementType, SavedInAttributeModel
+  ModelElementType, SavedInAttributeModel, SavedModelEdge
 } from '@home/components/widget/lib/settings/data-models/model-node.models';
 import {delay, share} from 'rxjs/operators';
 import {selectIsLoading} from '@core/interceptors/load.selectors';
@@ -425,12 +425,20 @@ export class DataModelsComponent implements OnInit {
     }
 
     const modelEdgeCopy = deepClone(modelEdge);
-    const edgesNamesList = this.model.edges.map(edge => edge.label);
-    const otherEdgesNamesList = mode === 'add' ? edgesNamesList : this.removeCurrentNameFromArray(edgesNamesList, modelEdge.label);
+    const edgesNamesList = this.model.edges.map(edge => {
+      return {
+        label: edge.label,
+        source: edge.source,
+        destination: edge.destination,
+        destinationType: this.model.nodes.find(e => e.connectors[0].id === edge.destination).type
+      }
+    });
+    const otherEdgesNamesList = mode === 'add' ? edgesNamesList : this.removeCurrentNameFromArrayList(edgesNamesList, modelEdge.label);
     this.dialog.open<AddModelEdgeDialogComponent, AddModelEdgeDialogData>(AddModelEdgeDialogComponent, {
       disableClose: true,
       panelClass: [],
       data: {
+        edgeDestinationType: this.model.nodes.find(e => e.connectors[0].id === modelEdgeCopy.destination).type,
         edge: modelEdgeCopy,
         modelEdgesSavedNamesList: otherEdgesNamesList
       }
@@ -513,6 +521,14 @@ export class DataModelsComponent implements OnInit {
 
   removeCurrentNameFromArray(array: string[], name: string) {
     const index = array.indexOf(name);
+    if (index !== -1) {
+      array.splice(index, 1);
+    }
+    return array;
+  }
+
+  removeCurrentNameFromArrayList(array: SavedModelEdge[], name: string) {
+    const index = array.map(e => e.label).indexOf(name);
     if (index !== -1) {
       array.splice(index, 1);
     }

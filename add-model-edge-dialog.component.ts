@@ -1,6 +1,6 @@
 import {ChangeDetectorRef, Component, Inject, OnInit, SkipSelf, ViewChild} from '@angular/core';
 import {ErrorStateMatcher} from '@angular/material/core';
-import {AddModelEdgeDialogData, ModelElementType} from './model-node.models';
+import {AddModelEdgeDialogData, ModelElementType, SavedModelEdge} from './model-node.models';
 import {Store} from '@ngrx/store';
 import {Router} from '@angular/router';
 import {MAT_DIALOG_DATA, MatDialogRef} from '@angular/material/dialog';
@@ -32,7 +32,7 @@ export class AddModelEdgeDialogComponent extends DialogComponent<AddModelEdgeDia
   modelEdgeForm: UntypedFormGroup;
 
   modelEdge!: FcEdge;
-  modelEdgesSavedNamesList!: string[];
+  modelEdgesSavedNamesList!: SavedModelEdge[];
 
   submitted = false;
 
@@ -50,6 +50,14 @@ export class AddModelEdgeDialogComponent extends DialogComponent<AddModelEdgeDia
     this.modelEdgeForm = this.fb.group({});
     this.modelEdge = this.data.edge;
     this.modelEdgesSavedNamesList = this.data.modelEdgesSavedNamesList;
+    if(this.data.edgeDestinationType === ModelElementType.DEVICE) {
+      this.modelEdgesSavedNamesList = this.modelEdgesSavedNamesList.filter(el => {
+        if(el.destinationType === ModelElementType.DEVICE && el.source === this.modelEdge.source) {
+          return false;
+        }
+        return true;
+      })
+    }
     this.buildForm();
   }
 
@@ -76,7 +84,7 @@ export class AddModelEdgeDialogComponent extends DialogComponent<AddModelEdgeDia
     this.modelEdgeForm = this.fb.group({
       label: [this.modelEdge.label, [Validators.required,
         Validators.pattern('(.|\\s)*\\S(.|\\s)*'), Validators.maxLength(255),
-        uniqueValueValidator(this.modelEdgesSavedNamesList)
+        uniqueValueValidator(this.modelEdgesSavedNamesList.map(e => e.label))
       ]]
     });
   }
